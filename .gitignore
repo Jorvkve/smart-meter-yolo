@@ -1,0 +1,6 @@
+node_modules
+uploads
+meter_dataset
+__pycache__
+*.pyc
+venv
