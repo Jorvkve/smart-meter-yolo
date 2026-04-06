@@ -2,9 +2,9 @@ from ultralytics import YOLO
 import cv2
 import os
 
-model = YOLO("runs/detect/train5/weights/best.pt")
+model = YOLO("runs/detect/train6/weights/best.pt")
 
-folder = "test_images_unseen"
+folder = "meter_dataset/images/train"
 
 for file in os.listdir(folder):
 

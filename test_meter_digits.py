@@ -2,7 +2,7 @@ from ultralytics import YOLO
 import cv2
 import os
 
-model = YOLO("runs/detect/train4/weights/best.pt")
+model = YOLO("runs/detect/train6/weights/best.pt")
 
 folder = "uploads"
 
