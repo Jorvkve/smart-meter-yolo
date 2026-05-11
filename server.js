@@ -61,6 +61,13 @@ app.get("/monthly", (req, res) => {
   );
 });
 
+// Billing
+app.get("/billing", (req, res) => {
+  res.sendFile(
+    path.join(__dirname, "public/html/billing.html")
+  );
+});
+
 // Admin
 app.get("/admin", (req, res) => {
   res.sendFile(
@@ -83,6 +90,10 @@ app.get("/daily.html", (req, res) =>
 
 app.get("/monthly.html", (req, res) =>
   res.redirect("/monthly")
+);
+
+app.get("/billing.html", (req, res) =>
+  res.redirect("/billing")
 );
 
 app.get("/admin.html", (req, res) =>

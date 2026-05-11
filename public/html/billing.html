@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>บิลค่าไฟ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="/css/style.css">
+</head>
+
+<body>
+<nav class="navbar navbar-expand-lg app-navbar">
+<div class="container">
+<a class="navbar-brand" href="/">Smart Meter</a>
+<div class="nav-actions">
+<a class="nav-link" href="/daily">รายวัน</a>
+<a class="nav-link" href="/monthly">รายเดือน</a>
+<a class="nav-link active" href="/billing">บิลค่าไฟ</a>
+<a class="nav-link" href="/admin">ผู้ดูแล</a>
+</div>
+</div>
+</nav>
+
+<main class="container page-shell">
+<section class="page-heading">
+<div>
+<p class="eyebrow">คำนวณค่าไฟ</p>
+<h1>บิลค่าไฟ</h1>
+</div>
+<p class="heading-copy">เลือกบ้านและช่วงเดือนเพื่อคำนวณค่าไฟ จากนั้นสร้างเป็นเอกสารบิลสำหรับพิมพ์หรือบันทึกเป็น PDF ได้ทันที</p>
+</section>
+
+<section class="surface-panel mb-4">
+<div class="panel-header">
+<div>
+<p class="eyebrow">เลือกช่วงคำนวณ</p>
+<h2>ตั้งค่าการคำนวณค่าไฟ</h2>
+</div>
+</div>
+
+<div class="bill-control-grid range-control-grid">
+<label class="rate-field">
+<span>บ้าน</span>
+<select id="houseSelect" class="form-select"></select>
+</label>
+<label class="rate-field">
+<span>เดือนต้นทาง</span>
+<select id="startMonth" class="form-select"></select>
+</label>
+<label class="rate-field">
+<span>เดือนปลายทาง</span>
+<select id="endMonth" class="form-select"></select>
+</label>
+<label class="rate-field">
+<span>บาทต่อหน่วย (kWh)</span>
+<input id="unitRate" class="form-control" type="number" min="0" step="0.01" value="4.20">
+</label>
+<button id="calculateBillBtn" class="btn btn-primary">คำนวณค่าไฟ</button>
+<button id="generateBillBtn" class="btn btn-success" disabled>สร้างบิล</button>
+</div>
+
+<p class="empty-note mt-3">ตัวอย่าง: ค่าไฟเดือน พ.ค. ใช้เลขมิเตอร์เดือน มิ.ย. ลบเลขมิเตอร์เดือน พ.ค. แล้วคูณค่าไฟต่อหน่วย</p>
+</section>
+
+<section class="bill-summary-grid mb-4">
+<div class="summary-card">
+<span>ค่าไฟรวมของช่วงที่เลือก</span>
+<strong id="totalBill">-</strong>
+</div>
+<div class="summary-card">
+<span>หน่วยไฟรวมของช่วงที่เลือก</span>
+<strong id="totalUnits">-</strong>
+</div>
+<div class="summary-card">
+<span>บ้านและช่วงเดือน</span>
+<strong id="selectedRange">-</strong>
+</div>
+</section>
+
+<section class="surface-panel mb-4">
+<div class="panel-header">
+<div>
+<p class="eyebrow">สูตรคำนวณ</p>
+<h2>หน่วย x ค่าไฟต่อหน่วย = ค่าไฟ</h2>
+</div>
+</div>
+<div id="billFormulaList" class="formula-list">
+<p class="empty-note">เลือกเดือนแล้วกดคำนวณเพื่อดูสูตรของบ้านที่เลือก</p>
+</div>
+</section>
+
+<section id="billPreviewSection" class="surface-panel bill-preview-section d-none">
+<div class="panel-header bill-preview-actions">
+<div>
+<p class="eyebrow">เอกสารบิล</p>
+<h2>ตัวอย่างบิลค่าไฟ</h2>
+</div>
+<button id="printBillBtn" class="btn btn-primary">พิมพ์ / บันทึก PDF</button>
+</div>
+<div id="billDocument" class="bill-document"></div>
+</section>
+</main>
+
+<script src="../js/billing.js"></script>
+</body>
+</html>

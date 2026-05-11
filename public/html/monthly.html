@@ -19,6 +19,7 @@
 <div class="nav-actions">
 <a class="nav-link" href="/daily">รายวัน</a>
 <a class="nav-link active" href="/monthly">รายเดือน</a>
+<a class="nav-link" href="/billing">บิลค่าไฟ</a>
 <a class="nav-link" href="/admin">ผู้ดูแล</a>
 </div>
 </div>
@@ -27,29 +28,70 @@
 <main class="container page-shell">
 <section class="page-heading">
 <div>
-<p class="eyebrow">แนวโน้มการใช้งาน</p>
+<p class="eyebrow">ภาพรวมรายเดือน</p>
 <h1>สถิติรายเดือน</h1>
 </div>
-<p class="heading-copy">ติดตามการใช้ไฟระยะยาว และเปรียบเทียบการใช้งานของแต่ละบ้านตามช่วงเวลา</p>
+<p class="heading-copy">เลือกบ้านเพื่อดูแนวโน้มค่าไฟและหน่วยไฟรายเดือน ส่วนการคำนวณเพื่อออกบิลแยกไปที่หน้าบิลค่าไฟ</p>
 </section>
 
 <section class="surface-panel mb-4">
 <div class="panel-header">
 <div>
-<p class="eyebrow">บ้านทั้งหมด</p>
-<h2>ยอดรวมรายเดือน</h2>
+<p class="eyebrow">ตัวกรอง</p>
+<h2>เลือกบ้านสำหรับดูภาพรวม</h2>
 </div>
 </div>
-<div class="chart-frame chart-frame-lg">
-<canvas id="monthlyChart"></canvas>
+<div class="monthly-filter-grid">
+<label class="rate-field">
+<span>บ้าน</span>
+<select id="houseSelect" class="form-select"></select>
+</label>
+<label class="rate-field">
+<span>บาทต่อหน่วย (สำหรับแปลงเป็นค่าไฟ)</span>
+<input id="unitRate" class="form-control" type="number" min="0" step="0.01" value="4.20">
+</label>
 </div>
 </section>
 
-<section>
-<div class="section-title">
-<h2>กราฟแยกตามบ้าน</h2>
+<section class="bill-summary-grid mb-4">
+<div class="summary-card">
+<span>ค่าไฟเดือนล่าสุด</span>
+<strong id="latestBill">-</strong>
 </div>
-<div id="houseMonthlyCharts" class="row g-4"></div>
+<div class="summary-card">
+<span>หน่วยไฟเดือนล่าสุด</span>
+<strong id="latestUnits">-</strong>
+</div>
+<div class="summary-card">
+<span>บ้านที่เลือก</span>
+<strong id="selectedHouseName">-</strong>
+</div>
+</section>
+
+<section class="surface-panel mb-4">
+<div class="panel-header">
+<div>
+<p class="eyebrow">ค่าไฟเป็นบาท</p>
+<h2>กราฟค่าไฟรายเดือนของบ้านที่เลือก</h2>
+</div>
+</div>
+<div class="chart-frame chart-frame-lg bill-chart-frame">
+<canvas id="selectedBillChart"></canvas>
+</div>
+<p id="selectedBillEmpty" class="empty-note mt-3"></p>
+</section>
+
+<section class="surface-panel mb-4">
+<div class="panel-header">
+<div>
+<p class="eyebrow">หน่วยไฟ</p>
+<h2>กราฟหน่วยไฟรายเดือนของบ้านที่เลือก</h2>
+</div>
+</div>
+<div class="chart-frame chart-frame-lg bill-chart-frame">
+<canvas id="selectedUsageChart"></canvas>
+</div>
+<p id="selectedUsageEmpty" class="empty-note mt-3"></p>
 </section>
 </main>
 

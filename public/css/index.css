@@ -103,7 +103,7 @@ h1 {
 
 .menu-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 18px;
 }
 
@@ -139,6 +139,10 @@ h1 {
   border-color: rgba(191, 107, 4, 0.42);
 }
 
+.card-billing:hover {
+  border-color: rgba(9, 60, 93, 0.42);
+}
+
 .menu-icon {
   width: 48px;
   height: 48px;
@@ -159,6 +163,10 @@ h1 {
   background: var(--amber);
 }
 
+.card-billing .menu-icon {
+  background: #093c5d;
+}
+
 .menu-kicker {
   margin-top: 44px;
   color: var(--muted);
@@ -177,6 +185,12 @@ h1 {
   margin-top: 10px;
   color: var(--muted);
   line-height: 1.6;
+}
+
+@media (max-width: 1100px) {
+  .menu-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 900px) {
