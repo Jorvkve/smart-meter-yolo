@@ -1,3 +1,17 @@
 __pycache__
 *.pyc
 venv
+node_modules
+.venv/
+.ultralytics/
+Ultralytics/
+uploads/
+cropped_images/
+ESP32-CAM image/
+iphone image/
+wifi_pic_tune/ESP32-CAM image/
+wifi_pic_tune/iphone image/
+*.zip
+runs/detect/predict*/
+runs/detect/esp32_outputs/
+runs/detect/runs/

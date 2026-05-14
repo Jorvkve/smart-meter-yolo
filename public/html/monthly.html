@@ -68,30 +68,32 @@
 </div>
 </section>
 
-<section class="surface-panel mb-4">
-<div class="panel-header">
+<section class="surface-panel monthly-chart-panel mb-4">
+<div class="panel-header monthly-chart-header">
 <div>
-<p class="eyebrow">ค่าไฟเป็นบาท</p>
-<h2>กราฟค่าไฟรายเดือนของบ้านที่เลือก</h2>
+<p id="monthlyTrendEyebrow" class="eyebrow">หน่วยไฟ</p>
+<h2 id="monthlyTrendTitle">กราฟหน่วยไฟรายเดือนของบ้านที่เลือก</h2>
+</div>
+<div class="chart-panel-controls" aria-label="สลับกราฟรายเดือน">
+<button id="prevChartBtn" class="chart-nav-btn" type="button" aria-label="กราฟก่อนหน้า">&lt;</button>
+<span id="monthlyTrendCounter" class="chart-counter">1 / 2</span>
+<button id="nextChartBtn" class="chart-nav-btn" type="button" aria-label="กราฟถัดไป">&gt;</button>
 </div>
 </div>
 <div class="chart-frame chart-frame-lg bill-chart-frame">
-<canvas id="selectedBillChart"></canvas>
+<canvas id="monthlyTrendChart"></canvas>
 </div>
-<p id="selectedBillEmpty" class="empty-note mt-3"></p>
-</section>
-
-<section class="surface-panel mb-4">
-<div class="panel-header">
+<p id="monthlyTrendEmpty" class="empty-note mt-3"></p>
+<div class="meter-reading-panel mt-4">
+<div class="meter-reading-header">
 <div>
-<p class="eyebrow">หน่วยไฟ</p>
-<h2>กราฟหน่วยไฟรายเดือนของบ้านที่เลือก</h2>
+<p class="eyebrow">เลขมิเตอร์จริง</p>
+<h3>เลขมิเตอร์สะสมที่ใช้คำนวณรายเดือน</h3>
 </div>
+<span class="meter-reading-caption">เดือนนี้ - เดือนก่อนหน้า = หน่วยที่ใช้</span>
 </div>
-<div class="chart-frame chart-frame-lg bill-chart-frame">
-<canvas id="selectedUsageChart"></canvas>
+<div id="meterReadingList" class="meter-reading-list"></div>
 </div>
-<p id="selectedUsageEmpty" class="empty-note mt-3"></p>
 </section>
 </main>
 

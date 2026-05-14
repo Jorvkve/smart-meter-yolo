@@ -49,6 +49,48 @@ router.delete("/:id", (req, res) => {
   res.json({ message: "Reading deleted" });
 });
 
+/* UPDATE WRONG READING VALUE */
+router.put("/:id", (req, res) => {
+
+  const readingId = Number(req.params.id);
+  const readingValue = Number(req.body.reading_value);
+
+  if (!Number.isInteger(readingId) || readingId <= 0) {
+    return res.status(400).json({
+      error: "reading id must be a positive integer"
+    });
+  }
+
+  if (!Number.isFinite(readingValue) || readingValue < 0) {
+    return res.status(400).json({
+      error: "reading_value must be a positive number"
+    });
+  }
+
+  db.query(
+    "UPDATE meter_readings SET reading_value=? WHERE id=?",
+    [readingValue, readingId],
+    (err, result) => {
+      if (err) {
+        console.log(err);
+        return res.status(500).json(err);
+      }
+
+      if (result.affectedRows === 0) {
+        return res.status(404).json({
+          error: "reading not found"
+        });
+      }
+
+      res.json({
+        message: "Reading updated",
+        id: readingId,
+        reading_value: readingValue
+      });
+    }
+  );
+});
+
 /*
 ==============================
 TODAY READINGS (Daily Chart)
@@ -289,16 +331,16 @@ router.get("/monthly-bills", (req, res) => {
       JOIN houses h ON h.id = m.house_id
       WHERE h.is_active = 1
     ),
-    month_start_readings AS (
+    month_readings AS (
       SELECT
         house_id,
         house_name,
         month_start,
-        reading_value AS start_reading,
-        LEAD(reading_value) OVER (
+        reading_value AS current_reading,
+        LAG(reading_value) OVER (
           PARTITION BY house_id
           ORDER BY month_start
-        ) AS next_start_reading
+        ) AS previous_reading
       FROM first_reading_each_month
       WHERE row_num = 1
     )
@@ -306,12 +348,14 @@ router.get("/monthly-bills", (req, res) => {
       house_id,
       house_name,
       DATE_FORMAT(month_start, '%m/%Y') AS month,
-      start_reading,
-      next_start_reading,
-      GREATEST(next_start_reading - start_reading, 0) AS usage_unit,
-      ROUND(GREATEST(next_start_reading - start_reading, 0) * ?, 2) AS bill_amount
-    FROM month_start_readings
-    WHERE next_start_reading IS NOT NULL
+      previous_reading AS start_reading,
+      current_reading AS end_reading,
+      previous_reading,
+      current_reading,
+      GREATEST(current_reading - previous_reading, 0) AS usage_unit,
+      ROUND(GREATEST(current_reading - previous_reading, 0) * ?, 2) AS bill_amount
+    FROM month_readings
+    WHERE previous_reading IS NOT NULL
     ORDER BY STR_TO_DATE(CONCAT('01/', DATE_FORMAT(month_start, '%m/%Y')), '%d/%m/%Y'), house_id
   `;
 
@@ -336,6 +380,7 @@ router.get("/latest", (req, res) => {
     SELECT 
       h.id,
       h.house_name,
+      r.id AS reading_id,
       r.reading_value,
       r.image_filename,
       r.reading_time
@@ -348,6 +393,7 @@ router.get("/latest", (req, res) => {
         ORDER BY reading_time DESC
         LIMIT 1
       )
+    ORDER BY h.id ASC
   `;
 
   db.query(sql, (err, result) => {

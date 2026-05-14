@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>การใช้ไฟรายวัน</title>
+<title>ตรวจสอบมิเตอร์รายวัน</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -28,29 +28,60 @@
 <main class="container page-shell">
 <section class="page-heading">
 <div>
-<p class="eyebrow">ภาพรวมล่าสุด</p>
-<h1>การใช้ไฟรายวัน</h1>
+<p class="eyebrow">ตรวจข้อมูลล่าสุด</p>
+<h1>ตรวจสอบมิเตอร์รายวัน</h1>
 </div>
-<p class="heading-copy">เปรียบเทียบค่ามิเตอร์ล่าสุดของบ้านทั้งหมดที่ลงทะเบียนไว้ในระบบ</p>
+<p class="heading-copy">ดูเลขมิเตอร์ล่าสุด รูปยืนยัน และสถานะผิดปกติของแต่ละบ้านหลังจาก ESP32-CAM ส่งข้อมูลเข้าระบบ</p>
+</section>
+
+<section class="daily-status-grid mb-4">
+<div class="daily-stat-card">
+<span>บ้านที่เปิดใช้งาน</span>
+<strong id="activeHouseCount">-</strong>
+</div>
+<div class="daily-stat-card">
+<span>อ่านสำเร็จล่าสุด</span>
+<strong id="latestReadCount">-</strong>
+</div>
+<div class="daily-stat-card">
+<span>รายการต้องตรวจสอบ</span>
+<strong id="warningCount">-</strong>
+</div>
+</section>
+
+<section class="mb-4">
+<div class="section-title daily-card-header">
+<h2>สถานะล่าสุดของแต่ละบ้าน</h2>
+<div class="chart-panel-controls" aria-label="สลับชุดบ้าน">
+<button id="prevHousePageBtn" class="chart-nav-btn" type="button" aria-label="บ้านชุดก่อนหน้า">&lt;</button>
+<span id="housePageCounter" class="chart-counter">1 / 1</span>
+<button id="nextHousePageBtn" class="chart-nav-btn" type="button" aria-label="บ้านชุดถัดไป">&gt;</button>
+</div>
+</div>
+<div class="daily-card-grid" id="houseCards"></div>
 </section>
 
 <section class="surface-panel mb-4">
 <div class="panel-header">
 <div>
-<p class="eyebrow">วันนี้</p>
-<h2>ภาพรวมการใช้ไฟล่าสุด</h2>
+<p class="eyebrow">ภาพรวมล่าสุด</p>
+<h2>เลขมิเตอร์สะสมล่าสุดของแต่ละบ้าน</h2>
 </div>
 </div>
-<div class="chart-frame">
+<div class="chart-frame daily-chart-frame">
 <canvas id="totalUsageChart"></canvas>
 </div>
 </section>
 
-<section>
-<div class="section-title">
-<h2>ค่ามิเตอร์แต่ละบ้าน</h2>
+<section class="surface-panel">
+<div class="panel-header">
+<div>
+<p class="eyebrow">ประวัติล่าสุด</p>
+<h2>รายการอ่านมิเตอร์ล่าสุด</h2>
 </div>
-<div class="row g-4" id="houseCards"></div>
+<a class="btn btn-sm btn-outline-primary" href="/admin">ตรวจ/แก้เลข</a>
+</div>
+<div id="recentReadings" class="recent-reading-list"></div>
 </section>
 </main>
 

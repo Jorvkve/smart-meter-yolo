@@ -43,7 +43,7 @@ router.post("/", (req, res) => {
 /* ===== GET ALL HOUSES ===== */
 router.get("/", (req, res) => {
 
-  const sql = "SELECT * FROM houses";
+  const sql = "SELECT * FROM houses ORDER BY id ASC";
 
   db.query(sql, (err, result) => {
     if (err) {

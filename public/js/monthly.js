@@ -1,5 +1,6 @@
-let selectedBillChart;
-let selectedUsageChart;
+let monthlyTrendChart;
+let monthlyHistory = [];
+let activeMetricIndex = 0;
 
 const chartPalette = {
   line: "#093C5D",
@@ -10,6 +11,27 @@ const chartPalette = {
   labelText: "#093C5D",
   axis: "#093C5D",
 };
+
+const metricViews = [
+  {
+    eyebrow: "หน่วยไฟ",
+    title: "กราฟหน่วยไฟรายเดือนของบ้านที่เลือก",
+    valueKey: "usage_unit",
+    datasetLabel: "หน่วยไฟที่ใช้",
+    emptyText: "ยังไม่มีประวัติหน่วยไฟรายเดือน บ้านที่เลือกต้องมีข้อมูลอย่างน้อย 2 เดือน",
+    formatter: formatShortUnits,
+    tooltipFormatter: value => `หน่วยไฟ: ${formatUnits(value)}`,
+  },
+  {
+    eyebrow: "ค่าไฟเป็นบาท",
+    title: "กราฟค่าไฟรายเดือนของบ้านที่เลือก",
+    valueKey: "bill_amount",
+    datasetLabel: "ค่าไฟ (บาท)",
+    emptyText: "ยังไม่มีประวัติค่าไฟรายเดือน บ้านที่เลือกต้องมีข้อมูลอย่างน้อย 2 เดือน",
+    formatter: formatShortBaht,
+    tooltipFormatter: value => `ค่าไฟ: ${formatBaht(value)}`,
+  },
+];
 
 function makeValueLabelPlugin(id, formatter) {
   return {
@@ -97,6 +119,10 @@ function formatShortUnits(value) {
   return Number(value || 0).toLocaleString("th-TH", { maximumFractionDigits: 2 });
 }
 
+function formatMeter(value) {
+  return Number(value || 0).toLocaleString("th-TH", { maximumFractionDigits: 0 });
+}
+
 function getRate() {
   return Number(document.getElementById("unitRate")?.value || 0);
 }
@@ -131,36 +157,72 @@ async function loadSelectedHouseHistory() {
 
   const res = await fetch(`http://localhost:3000/api/readings/monthly-bills?rate=${encodeURIComponent(rate)}`);
   const payload = await res.json();
-  const data = (payload.rows || []).filter(row => String(row.house_id) === String(houseSelect.value));
+  monthlyHistory = (payload.rows || []).filter(row => String(row.house_id) === String(houseSelect.value));
+
   const houseName = houseSelect.options[houseSelect.selectedIndex]?.text || "-";
-  const latest = data[data.length - 1];
+  const latest = monthlyHistory[monthlyHistory.length - 1];
 
   document.getElementById("selectedHouseName").innerText = houseName;
   document.getElementById("latestBill").innerText = latest ? formatBaht(latest.bill_amount) : "-";
   document.getElementById("latestUnits").innerText = latest ? formatUnits(latest.usage_unit) : "-";
 
-  selectedBillChart = renderLineChart({
-    existingChart: selectedBillChart,
-    canvasId: "selectedBillChart",
-    emptyId: "selectedBillEmpty",
-    data,
-    valueKey: "bill_amount",
-    datasetLabel: "ค่าไฟ (บาท)",
-    emptyText: "ยังไม่มีประวัติค่าไฟรายเดือน บ้านที่เลือกต้องมีข้อมูลอย่างน้อย 2 เดือน",
-    formatter: formatShortBaht,
-    tooltipFormatter: value => `ค่าไฟ: ${formatBaht(value)}`,
-  });
+  renderMeterReadingList();
+  renderActiveMetricChart();
+}
 
-  selectedUsageChart = renderLineChart({
-    existingChart: selectedUsageChart,
-    canvasId: "selectedUsageChart",
-    emptyId: "selectedUsageEmpty",
-    data,
-    valueKey: "usage_unit",
-    datasetLabel: "หน่วยไฟที่ใช้",
-    emptyText: "ยังไม่มีประวัติหน่วยไฟรายเดือน บ้านที่เลือกต้องมีข้อมูลอย่างน้อย 2 เดือน",
-    formatter: formatShortUnits,
-    tooltipFormatter: value => `หน่วยไฟ: ${formatUnits(value)}`,
+function renderMeterReadingList() {
+  const list = document.getElementById("meterReadingList");
+  if (!list) return;
+
+  if (!monthlyHistory.length) {
+    list.innerHTML = `<p class="empty-note mb-0">ยังไม่มีเลขมิเตอร์สะสมสำหรับบ้านที่เลือก</p>`;
+    return;
+  }
+
+  list.innerHTML = monthlyHistory.map(row => `
+    <article class="meter-reading-item">
+      <div>
+        <span>${row.month}</span>
+        <strong>${formatMeter(row.current_reading ?? row.end_reading)}</strong>
+      </div>
+      <p>
+        ${formatMeter(row.current_reading ?? row.end_reading)}
+        <span>-</span>
+        ${formatMeter(row.previous_reading ?? row.start_reading)}
+        <span>=</span>
+        <b>${formatUnits(row.usage_unit)}</b>
+      </p>
+    </article>
+  `).join("");
+}
+
+function showPreviousMetric() {
+  activeMetricIndex = (activeMetricIndex - 1 + metricViews.length) % metricViews.length;
+  renderActiveMetricChart();
+}
+
+function showNextMetric() {
+  activeMetricIndex = (activeMetricIndex + 1) % metricViews.length;
+  renderActiveMetricChart();
+}
+
+function renderActiveMetricChart() {
+  const config = metricViews[activeMetricIndex];
+
+  document.getElementById("monthlyTrendEyebrow").innerText = config.eyebrow;
+  document.getElementById("monthlyTrendTitle").innerText = config.title;
+  document.getElementById("monthlyTrendCounter").innerText = `${activeMetricIndex + 1} / ${metricViews.length}`;
+
+  monthlyTrendChart = renderLineChart({
+    existingChart: monthlyTrendChart,
+    canvasId: "monthlyTrendChart",
+    emptyId: "monthlyTrendEmpty",
+    data: monthlyHistory,
+    valueKey: config.valueKey,
+    datasetLabel: config.datasetLabel,
+    emptyText: config.emptyText,
+    formatter: config.formatter,
+    tooltipFormatter: config.tooltipFormatter,
   });
 }
 
@@ -265,6 +327,8 @@ async function initMonthlyPage() {
 
   houseSelect?.addEventListener("change", loadSelectedHouseHistory);
   rateInput?.addEventListener("change", loadSelectedHouseHistory);
+  document.getElementById("prevChartBtn")?.addEventListener("click", showPreviousMetric);
+  document.getElementById("nextChartBtn")?.addEventListener("click", showNextMetric);
 }
 
 initMonthlyPage().catch(err => console.error("Error loading monthly page:", err));

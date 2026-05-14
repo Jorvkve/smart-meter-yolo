@@ -81,7 +81,9 @@ Database:
 
 Python/model files:
 
-- `train.py`, `crop_train.py`, `check_accuracy.py`, `test_meter_digits.py`, `test_new_images.py`, `yolov8_image.py`
+- `tools/train.py`, `tools/crop_train.py`, `tools/check_accuracy.py`, `tools/test_meter_digits.py`, `tools/test_new_images.py`, `tools/yolov8_image.py`
+- `tools/check_esp32_train8.py` - demo script for testing `train-8` against ESP32-CAM images and saving bounding-box output
+- `tools/README.md` - notes for Python training/testing scripts
 - `yolov8n.pt`, `yolo26n.pt`
 - `meter_dataset/`, `runs/`, `test_images/`, `test_images_unseen/`
 
@@ -102,9 +104,12 @@ POST /api/upload
 multipart/form-data:
   image: File
   house_id: Text
+  reading_value: Text/Number (optional manual override)
 ```
 
 Important upload detail: Postman field key must be exactly `house_id`. Hidden Thai/Unicode marks before the key will make the backend receive a different field name.
+
+The upload route saves the image, tries to run `tools/predict_meter_reading.py` with `runs/detect/train-8/weights/best.pt`, then inserts a row into `meter_readings`. If `reading_value` is sent, it is used as a manual override and YOLO is skipped. If YOLO cannot read a value, the row is still saved with `reading_value = NULL` so it can be reviewed in `/admin`.
 
 Reading/billing endpoints in `routes/readings.js`:
 
@@ -117,26 +122,26 @@ Reading/billing endpoints in `routes/readings.js`:
 
 ## Billing Logic
 
-Billing is based on cumulative meter values. To calculate usage for a month, use the next month reading minus the current month reading.
+Billing is based on cumulative meter values. To calculate usage for a month, use the current month reading minus the previous month reading.
 
 Example:
 
 ```text
-May bill usage = June meter reading - May meter reading
+May bill usage = May meter reading - April meter reading
 May bill amount = usage * unit rate
 ```
 
 If readings are collected on the 10th of every month, this still works:
 
 ```text
-May usage = reading on June 10 - reading on May 10
+May usage = reading on May 10 - reading on April 10
 ```
 
 Implementation details:
 
 - `monthly-bills` uses the first reading found in each month per house.
 - It uses SQL `ROW_NUMBER()` to select the first reading of each month.
-- It uses SQL `LEAD()` to get the next month reading.
+- It uses SQL `LAG()` to get the previous month reading.
 - A house needs at least two months of readings to produce one monthly bill point.
 - `/billing` is for manual bill-range calculation and client-side bill generation.
 - `/monthly` is only for viewing charts/overview for a selected house.
