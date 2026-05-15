@@ -37,7 +37,7 @@ const char* password = "Tewit8123";
 */
 const char* serverUrl =
 // "https://smart-meter-render.onrender.com/upload";
- "http://192.168.1.129:3000/api/upload";
+  "http://192.168.1.129:3000/api/upload";
   const char* houseId = "3";
 
 /* ================= ตั้งค่ารูปภาพและการอัปโหลด =================

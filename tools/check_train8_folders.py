@@ -6,7 +6,7 @@ from ultralytics import YOLO
 
 MODEL_PATH = Path("runs/detect/train-8/weights/best.pt")
 JOBS = [
-    (Path("uploads"), Path("runs/detect/esp32_outputs/train8_clean_esp32")),
+    (Path("esp32-cam image/150569"), Path("runs/detect/esp32_outputs/train8_clean_esp32day150269")),
     #(Path("iphone image"), Path("runs/detect/esp32_outputs/train8_clean_iphone")),
 ]
 MIN_CENTER_DISTANCE = 28

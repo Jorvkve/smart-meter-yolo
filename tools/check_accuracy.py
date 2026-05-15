@@ -4,7 +4,7 @@ import os
 
 model = YOLO("runs/detect/train-8/weights/best.pt")
 
-folder = "cropped_images"
+folder = "esp32-cam image/150569"
 
 correct = 0
 total = 0
