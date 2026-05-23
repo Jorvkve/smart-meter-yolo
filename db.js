@@ -5,7 +5,8 @@ const db = mysql.createConnection({
   user: "root",
   password: "",
   database: "smart_meter_db",
-  port: 3306
+  port: 3306,
+  dateStrings: true
 });
 
 db.connect(err => {

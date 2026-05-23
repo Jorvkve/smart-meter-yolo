@@ -11,6 +11,14 @@ This is a Smart Meter backend and static dashboard project. It combines:
 - YOLO/OCR-related Python scripts and model artifacts for meter/digit detection
 - Monthly electricity usage and billing calculations
 
+Open TODO:
+
+- `TODO.md` tracks the next ESP32-CAM step: update the firmware to capture 3-5 frames and send them as burst `images` uploads. The backend already supports burst selection.
+- `TODO.md` also tracks the monthly billing cutoff issue: `/monthly` currently uses the first reading of each month, but it should eventually choose readings nearest a configured billing cutoff day/time.
+- Target sampling policy: daily dashboard readings should be selected snapshots every 1 or 3 hours; monthly billing should use the configured billing cutoff; near each scheduled reading, ESP32-CAM should run a 5-minute burst window with one frame every 30 seconds, then store only the selected best reading.
+- Experimental scheduled burst firmware lives in `wifi_pic_tune_burst/wifi_pic_tune_burst.ino`. Keep `wifi_pic_tune/wifi_pic_tune.ino` as the stable single-image sketch unless the user explicitly asks to change it.
+- `/billing` saves generated dorm-style electricity bills into `electric_bills` and shows bill history for review.
+
 The current app routes are:
 
 - `/` landing page
@@ -107,9 +115,24 @@ multipart/form-data:
   reading_value: Text/Number (optional manual override)
 ```
 
+Burst upload for transition-frame testing:
+
+```text
+POST /api/upload
+multipart/form-data:
+  images: File
+  images: File
+  images: File
+  house_id: Text
+```
+
+The single-image field `image` still works. When multiple files are uploaded, the backend predicts every frame and inserts only the selected best frame/result into `meter_readings`. The response includes `burst`, `frames`, `selected_frame`, `selection_reason`, and `previous_reading`.
+
+By default, unselected burst image files are deleted after selection so the interface and `uploads/` stay focused on useful readings. Send `keep_frames=true` only when debugging model behavior.
+
 Important upload detail: Postman field key must be exactly `house_id`. Hidden Thai/Unicode marks before the key will make the backend receive a different field name.
 
-The upload route saves the image, tries to run `tools/predict_meter_reading.py` with `runs/detect/train-8/weights/best.pt`, then inserts a row into `meter_readings`. If `reading_value` is sent, it is used as a manual override and YOLO is skipped. If YOLO cannot read a value, the row is still saved with `reading_value = NULL` so it can be reviewed in `/admin`.
+The upload route saves the image(s), tries to run `tools/predict_meter_reading.py` with `runs/detect/train-8/weights/best.pt`, then inserts a row into `meter_readings`. If `reading_value` is sent, it is used as a manual override and YOLO is skipped. If YOLO cannot read a value, the row is still saved with `reading_value = NULL` so it can be reviewed in `/admin`.
 
 Reading/billing endpoints in `routes/readings.js`:
 
@@ -119,6 +142,8 @@ Reading/billing endpoints in `routes/readings.js`:
 - `GET /api/readings/reading-months?house_id=1`
 - `GET /api/readings/bill-range?house_id=1&start=2026-03&end=2026-05&rate=4.2`
 - `GET /api/readings/monthly-bills?rate=4.2`
+- `GET /api/readings/bill-history`
+- `POST /api/readings/bill-history`
 
 ## Billing Logic
 
@@ -143,7 +168,9 @@ Implementation details:
 - It uses SQL `ROW_NUMBER()` to select the first reading of each month.
 - It uses SQL `LAG()` to get the previous month reading.
 - A house needs at least two months of readings to produce one monthly bill point.
-- `/billing` is for manual bill-range calculation and client-side bill generation.
+- `/billing` is for manual bill-range calculation, bill generation, print/PDF, and bill history.
+- Generated bills are stored in `electric_bills`; the table is created automatically by `routes/readings.js` if it does not exist.
+- Billing is dorm-style: usage units multiplied by the configured unit rate. Do not add tax, Ft, service fees, or other utility-company charges unless the user explicitly asks.
 - `/monthly` is only for viewing charts/overview for a selected house.
 
 ## Frontend UX Separation

@@ -95,8 +95,10 @@
 <select id="filterMonth" class="form-select" onchange="renderReadings()">
 <option value="">ทุกเดือน</option>
 </select>
+<input id="filterDate" class="form-control" type="date" onchange="renderReadings()" aria-label="เลือกวันที่อ่านมิเตอร์">
 <select id="filterStatus" class="form-select" onchange="renderReadings()">
-<option value="">ทุกสถานะ</option>
+<option value="" selected>ทุกสถานะ</option>
+<option value="needs_review">ต้องตรวจสอบ</option>
 <option value="danger">เลขลดลง</option>
 <option value="warn">เพิ่มสูง/ไม่มีรูป</option>
 <option value="missing_image">ไม่มีรูป</option>
@@ -105,7 +107,7 @@
 <select id="sortType" class="form-select" onchange="renderReadings()">
 <option value="latest">เวลาใหม่ล่าสุด</option>
 <option value="oldest">เวลาเก่าสุด</option>
-<option value="house_time">บ้าน 1-3 และเวลาเก่าไปใหม่</option>
+<option value="house_time" selected>บ้าน 1-3 และเวลาเก่าไปใหม่</option>
 <option value="house">เรียงตามชื่อบ้าน</option>
 <option value="unit_high">เลขมิเตอร์มากที่สุด</option>
 <option value="unit_low">เลขมิเตอร์น้อยที่สุด</option>
@@ -113,6 +115,11 @@
 </div>
 <div class="admin-reading-summary mb-3">
 <span id="readingResultCount">-</span>
+<select id="readingPageSize" class="form-select form-select-sm admin-page-size" onchange="renderReadings()">
+<option value="25" selected>25 รายการ/หน้า</option>
+<option value="50">50 รายการ/หน้า</option>
+<option value="100">100 รายการ/หน้า</option>
+</select>
 <button class="btn btn-sm btn-outline-secondary" type="button" onclick="resetReadingFilters()">ล้างตัวกรอง</button>
 </div>
 
@@ -131,7 +138,9 @@
 <tbody id="readingTable"></tbody>
 </table>
 </div>
+<div id="readingPagination" class="admin-pagination mt-3"></div>
 </section>
+
 </main>
 
 <div id="readingEditModal" class="review-modal d-none" role="dialog" aria-modal="true" aria-labelledby="readingEditTitle">
@@ -158,6 +167,7 @@
 <input id="reviewReadingValue" class="form-control" type="number" min="0" step="0.01">
 </label>
 <p class="empty-note mt-3">ดูเลขจากรูปมิเตอร์ แล้วแก้ค่าที่ YOLO อ่านผิดก่อนนำไปคำนวณรายเดือนหรือออกบิล</p>
+<div id="reviewFrameMeta" class="frame-meta-panel mt-3"></div>
 <div class="review-actions">
 <button class="btn btn-primary" type="button" onclick="saveReadingValue()">บันทึกเลขมิเตอร์</button>
 <button class="btn btn-outline-secondary" type="button" onclick="closeReadingEditor()">ยกเลิก</button>

@@ -57,20 +57,21 @@ def summarize_digits(result):
 
 
 def main():
-    if len(sys.argv) != 2:
-        raise SystemExit("Usage: predict_meter_reading.py <image_path>")
+    if len(sys.argv) < 2:
+        raise SystemExit("Usage: predict_meter_reading.py <image_path> [image_path...]")
 
-    image_path = Path(sys.argv[1])
+    image_paths = [Path(arg) for arg in sys.argv[1:]]
 
-    if not image_path.exists():
-        raise SystemExit(f"Image not found: {image_path}")
+    for image_path in image_paths:
+        if not image_path.exists():
+            raise SystemExit(f"Image not found: {image_path}")
 
     if not MODEL_PATH.exists():
         raise SystemExit(f"Model not found: {MODEL_PATH}")
 
     model = YOLO(str(MODEL_PATH))
     results = model.predict(
-        source=str(image_path),
+        source=[str(image_path) for image_path in image_paths],
         save=False,
         conf=0.25,
         iou=0.35,
@@ -78,19 +79,28 @@ def main():
         verbose=False,
     )
 
-    meter_text, detections = summarize_digits(results[0])
-    reading_value = int(meter_text) if meter_text.isdigit() else None
-    avg_conf = (
-        sum(item["conf"] for item in detections) / len(detections)
-        if detections else None
-    )
+    predictions = []
 
-    print(json.dumps({
-        "reading_value": reading_value,
-        "meter_text": meter_text,
-        "boxes": len(detections),
-        "avg_conf": avg_conf,
-    }))
+    for image_path, result in zip(image_paths, results):
+        meter_text, detections = summarize_digits(result)
+        reading_value = int(meter_text) if meter_text.isdigit() else None
+        avg_conf = (
+            sum(item["conf"] for item in detections) / len(detections)
+            if detections else None
+        )
+
+        predictions.append({
+            "image_path": str(image_path),
+            "reading_value": reading_value,
+            "meter_text": meter_text,
+            "boxes": len(detections),
+            "avg_conf": avg_conf,
+        })
+
+    if len(predictions) == 1:
+        print(json.dumps(predictions[0]))
+    else:
+        print(json.dumps({"frames": predictions}))
 
 
 if __name__ == "__main__":

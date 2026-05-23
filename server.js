@@ -34,6 +34,7 @@ app.use(
 app.use("/api/houses", require("./routes/houses"));
 app.use("/api/readings", require("./routes/readings"));
 app.use("/api/upload", require("./routes/upload"));
+app.use("/api/device-ping", require("./routes/devicePing"));
 
 
 /* ===============================

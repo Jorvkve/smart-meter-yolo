@@ -33,19 +33,18 @@
     <main class="container page-shell">
       <section class="page-heading">
         <div>
-          <p class="eyebrow">คำนวณค่าไฟ</p>
+          <p class="eyebrow">คิดค่าไฟหอพัก</p>
           <h1>บิลค่าไฟ</h1>
         </div>
         <p class="heading-copy">
-          เลือกบ้านและช่วงเดือนเพื่อคำนวณค่าไฟ
-          จากนั้นสร้างเป็นเอกสารบิลสำหรับพิมพ์หรือบันทึกเป็น PDF ได้ทันที
+          เลือกบ้านและช่วงเดือนเพื่อคำนวณค่าไฟแบบหอพัก จากนั้นสร้างบิลและบันทึกประวัติไว้ตรวจสอบย้อนหลัง
         </p>
       </section>
 
       <section class="surface-panel mb-4">
         <div class="panel-header">
           <div>
-            <p class="eyebrow">เลือกช่วงคำนวณ</p>
+            <p class="eyebrow">เลือกรอบบิล</p>
             <h2>ตั้งค่าการคำนวณค่าไฟ</h2>
           </div>
         </div>
@@ -83,8 +82,7 @@
         </div>
 
         <p class="empty-note mt-3">
-          ตัวอย่าง: ค่าไฟเดือน พ.ค. ใช้เลขมิเตอร์เดือน เม.ย. ลบเลขมิเตอร์เดือน
-          พ.ค. แล้วคูณค่าไฟต่อหน่วย
+          เดโม่ใช้เลขมิเตอร์รายการแรกของแต่ละเดือนเป็นตัวแทนรอบบิล ส่วนการใช้งานจริงควรกำหนดวัน/เวลาตัดรอบบิล เช่น ทุกวันที่ 15 เวลา 12:00
         </p>
       </section>
 
@@ -132,7 +130,79 @@
         </div>
         <div id="billDocument" class="bill-document"></div>
       </section>
+
+      <section id="billHistorySection" class="surface-panel mt-4">
+        <div class="panel-header">
+          <div>
+            <p class="eyebrow">ประวัติบิล</p>
+            <h2>ประวัติบิล</h2>
+          </div>
+          <div class="bill-history-actions">
+            <button id="refreshHistoryBtn" class="btn btn-outline-primary">
+              รีเฟรช
+            </button>
+          </div>
+        </div>
+        <div class="bill-history-filter-grid">
+          <label class="rate-field">
+            <span>ค้นหาเลขที่บิล</span>
+            <input
+              id="historySearchInput"
+              class="form-control"
+              type="search"
+              placeholder="เช่น SM-2026..."
+            />
+          </label>
+          <label class="rate-field">
+            <span>บ้าน</span>
+            <select id="historyHouseFilter" class="form-select">
+              <option value="">ทุกบ้าน</option>
+            </select>
+          </label>
+          <label class="rate-field">
+            <span>รอบเดือน</span>
+            <input id="historyMonthFilter" class="form-control" type="month" />
+          </label>
+          <button id="clearHistoryFilterBtn" class="btn btn-outline-secondary">
+            ล้างตัวกรอง
+          </button>
+        </div>
+        <div id="billHistoryList" class="bill-history-list">
+          <p class="empty-note">ยังไม่มีประวัติบิล</p>
+        </div>
+      </section>
+
     </main>
+
+    <div
+      id="billHistoryDetailModal"
+      class="review-modal d-none"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="billHistoryDetailTitle"
+    >
+      <div class="review-modal-backdrop" onclick="closeBillHistoryDetail()"></div>
+      <section class="review-modal-panel bill-history-detail-panel">
+        <div class="panel-header">
+          <div>
+            <p class="eyebrow">รายละเอียดบิล</p>
+            <h2 id="billHistoryDetailTitle">รายละเอียดค่าไฟ</h2>
+          </div>
+          <button class="btn btn-outline-secondary btn-sm" type="button" onclick="closeBillHistoryDetail()">
+            ปิด
+          </button>
+        </div>
+        <div id="billHistoryDetailBody" class="bill-history-detail-body"></div>
+        <div class="review-actions">
+          <button id="detailViewBillBtn" class="btn btn-primary" type="button">
+            ดูใบแจ้งค่าไฟ
+          </button>
+          <button class="btn btn-outline-secondary" type="button" onclick="closeBillHistoryDetail()">
+            ยกเลิก
+          </button>
+        </div>
+      </section>
+    </div>
 
     <script src="../js/billing.js"></script>
   </body>

@@ -8,6 +8,8 @@ const { promisify } = require("util");
 const db = require("../db");
 
 const execFileAsync = promisify(execFile);
+const EXPECTED_DIGIT_COUNT = 5;
+const CLOSE_TRANSITION_UNIT_WINDOW = 20;
 
 // ===== Storage =====
 const storage = multer.diskStorage({
@@ -15,12 +17,56 @@ const storage = multer.diskStorage({
     cb(null, "uploads/");
   },
   filename: (req, file, cb) => {
-    const uniqueName = "meter_" + Date.now() + path.extname(file.originalname);
+    const uniqueName = "meter_" + Date.now() + "_" + Math.round(Math.random() * 1e9) + path.extname(file.originalname);
     cb(null, uniqueName);
   },
 });
 
 const upload = multer({ storage });
+
+const readingMetadataColumns = [
+  ["capture_mode", "VARCHAR(20) NULL DEFAULT 'single'"],
+  ["selected_frame", "INT NULL"],
+  ["selection_reason", "VARCHAR(80) NULL"],
+  ["avg_conf", "FLOAT NULL"],
+  ["frames_summary", "JSON NULL"],
+];
+
+function ensureReadingMetadataColumns() {
+  return new Promise(resolve => {
+    db.query("SHOW COLUMNS FROM meter_readings", (err, columns) => {
+      if (err) {
+        console.warn("Could not inspect meter_readings columns:", err.message);
+        resolve();
+        return;
+      }
+
+      const existingColumns = new Set(columns.map(column => column.Field));
+      const missingColumns = readingMetadataColumns.filter(([column]) => !existingColumns.has(column));
+
+      if (!missingColumns.length) {
+        resolve();
+        return;
+      }
+
+      let pending = missingColumns.length;
+
+      missingColumns.forEach(([column, definition]) => {
+        db.query(
+          `ALTER TABLE meter_readings ADD COLUMN ${column} ${definition}`,
+          alterErr => {
+            if (alterErr) {
+              console.warn(`Could not add ${column} to meter_readings:`, alterErr.message);
+            }
+
+            pending -= 1;
+            if (pending === 0) resolve();
+          }
+        );
+      });
+    });
+  });
+}
 
 function getPythonPath() {
   const localPython = path.join(process.cwd(), ".venv", "Scripts", "python.exe");
@@ -28,25 +74,61 @@ function getPythonPath() {
 }
 
 async function predictReadingValue(imagePath) {
+  const predictions = await predictReadingValues([imagePath]);
+  return predictions[0] || null;
+}
+
+async function predictReadingValues(imagePaths) {
   const scriptPath = path.join(process.cwd(), "tools", "predict_meter_reading.py");
   const { stdout } = await execFileAsync(
     getPythonPath(),
-    [scriptPath, imagePath],
+    [scriptPath, ...imagePaths],
     {
       cwd: process.cwd(),
-      timeout: 30000,
-      maxBuffer: 1024 * 1024,
+      timeout: 180000,
+      maxBuffer: 4 * 1024 * 1024,
     }
   );
   const jsonLine = stdout.trim().split(/\r?\n/).reverse().find(line => line.trim().startsWith("{"));
-  return jsonLine ? JSON.parse(jsonLine) : null;
+  const payload = jsonLine ? JSON.parse(jsonLine) : null;
+
+  if (!payload) return [];
+  if (Array.isArray(payload.frames)) return payload.frames;
+  return [payload];
 }
 
-function insertReading({ houseId, readingValue, filename }) {
+function normalizePredictedReading(value) {
+  if (value === null || value === undefined || value === "") return null;
+
+  const readingValue = Number(value);
+  return Number.isFinite(readingValue) ? readingValue : null;
+}
+
+function insertReading({
+  houseId,
+  readingValue,
+  filename,
+  captureMode,
+  selectedFrame,
+  selectionReason,
+  avgConf,
+  framesSummary,
+}) {
   return new Promise((resolve, reject) => {
     db.query(
-      "INSERT INTO meter_readings (house_id, reading_value, image_filename) VALUES (?, ?, ?)",
-      [houseId, readingValue, filename],
+      `INSERT INTO meter_readings
+       (house_id, reading_value, image_filename, capture_mode, selected_frame, selection_reason, avg_conf, frames_summary)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        houseId,
+        readingValue,
+        filename,
+        captureMode,
+        selectedFrame,
+        selectionReason,
+        avgConf,
+        framesSummary ? JSON.stringify(framesSummary) : null,
+      ],
       (err, result) => {
         if (err) return reject(err);
         resolve(result);
@@ -55,9 +137,147 @@ function insertReading({ houseId, readingValue, filename }) {
   });
 }
 
-// ===== Upload Image Only =====
-router.post("/", upload.single("image"), async (req, res) => {
-  if (!req.file) {
+function getLatestReading(houseId) {
+  return new Promise((resolve, reject) => {
+    db.query(
+      `SELECT reading_value
+       FROM meter_readings
+       WHERE house_id = ? AND reading_value IS NOT NULL
+       ORDER BY reading_time DESC, id DESC
+       LIMIT 1`,
+      [houseId],
+      (err, rows) => {
+        if (err) return reject(err);
+        resolve(rows[0]?.reading_value ?? null);
+      }
+    );
+  });
+}
+
+function median(values) {
+  if (!values.length) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0
+    ? (sorted[middle - 1] + sorted[middle]) / 2
+    : sorted[middle];
+}
+
+function chooseBestFrame(frames, latestReading) {
+  const validFrames = frames.filter(frame => Number.isInteger(frame.reading_value));
+
+  if (!validFrames.length) {
+    return {
+      selected: null,
+      reason: "no_valid_prediction",
+    };
+  }
+
+  const monotonicFrames = latestReading === null
+    ? validFrames
+    : validFrames.filter(frame => frame.reading_value >= latestReading);
+  const candidates = monotonicFrames.length ? monotonicFrames : validFrames;
+  const values = candidates.map(frame => frame.reading_value);
+  const minValue = Math.min(...values);
+  const maxValue = Math.max(...values);
+
+  if (maxValue - minValue <= CLOSE_TRANSITION_UNIT_WINDOW) {
+    const selected = [...candidates].sort((a, b) => {
+      if (b.reading_value !== a.reading_value) return b.reading_value - a.reading_value;
+      if ((b.prediction?.boxes || 0) !== (a.prediction?.boxes || 0)) {
+        return (b.prediction?.boxes || 0) - (a.prediction?.boxes || 0);
+      }
+      return (b.prediction?.avg_conf || 0) - (a.prediction?.avg_conf || 0);
+    })[0];
+
+    return {
+      selected,
+      reason: "close_transition_choose_highest",
+    };
+  }
+
+  const middleValue = median(values);
+  const groups = new Map();
+
+  for (const frame of candidates) {
+    const key = String(frame.reading_value);
+    const current = groups.get(key) || {
+      reading_value: frame.reading_value,
+      count: 0,
+      avg_conf_sum: 0,
+      full_digit_count: 0,
+      latest_index: -1,
+      best_frame: frame,
+    };
+
+    current.count += 1;
+    current.avg_conf_sum += frame.prediction?.avg_conf || 0;
+    current.full_digit_count += frame.prediction?.boxes === EXPECTED_DIGIT_COUNT ? 1 : 0;
+    current.latest_index = Math.max(current.latest_index, frame.index);
+
+    if ((frame.prediction?.avg_conf || 0) > (current.best_frame.prediction?.avg_conf || 0)) {
+      current.best_frame = frame;
+    }
+
+    groups.set(key, current);
+  }
+
+  const selectedGroup = [...groups.values()].sort((a, b) => {
+    if (b.count !== a.count) return b.count - a.count;
+    if (b.full_digit_count !== a.full_digit_count) return b.full_digit_count - a.full_digit_count;
+
+    const aNearMedian = Math.abs(a.reading_value - middleValue);
+    const bNearMedian = Math.abs(b.reading_value - middleValue);
+    if (aNearMedian !== bNearMedian) return aNearMedian - bNearMedian;
+
+    const aAvgConf = a.avg_conf_sum / a.count;
+    const bAvgConf = b.avg_conf_sum / b.count;
+    if (bAvgConf !== aAvgConf) return bAvgConf - aAvgConf;
+
+    return b.latest_index - a.latest_index;
+  })[0];
+
+  return {
+    selected: selectedGroup.best_frame,
+    reason: "majority_confidence_median",
+  };
+}
+
+function deleteUnselectedBurstFiles(files, selectedFile) {
+  const selectedName = selectedFile?.filename;
+
+  for (const file of files) {
+    if (file.filename === selectedName) continue;
+
+    fs.unlink(file.path, err => {
+      if (err) {
+        console.warn(`Could not delete unselected burst frame ${file.filename}:`, err.message);
+      }
+    });
+  }
+}
+
+function summarizeFrames(frames, selectedIndex) {
+  return frames.map(frame => ({
+    index: frame.index,
+    filename: frame.filename,
+    reading_value: frame.reading_value,
+    boxes: frame.prediction?.boxes ?? null,
+    avg_conf: frame.prediction?.avg_conf ?? null,
+    selected: frame.index === selectedIndex,
+    prediction_error: frame.prediction_error,
+  }));
+}
+
+const metadataColumnsReady = ensureReadingMetadataColumns();
+
+// ===== Upload Image / Burst Images =====
+router.post("/", upload.any(), async (req, res) => {
+  const imageFiles = (req.files || []).filter(file =>
+    file.fieldname === "image" || file.fieldname === "images"
+  );
+
+  if (!imageFiles.length) {
     return res.status(400).json({
       error: "No image uploaded",
     });
@@ -86,33 +306,92 @@ router.post("/", upload.single("image"), async (req, res) => {
   let prediction = null;
   let predictionError = null;
   let readingValue = manualReading;
+  let selectedFile = imageFiles[0];
+  let selectedFrame = null;
+  let frames = [];
+  let selectionReason = manualReading !== null ? "manual_reading" : null;
+  let latestReading = null;
+  const keepFrames = String(req.body.keep_frames || "").toLowerCase() === "true";
 
   if (readingValue === null) {
     try {
-      prediction = await predictReadingValue(req.file.path);
-      readingValue = Number.isFinite(Number(prediction?.reading_value))
-        ? Number(prediction.reading_value)
-        : null;
+      latestReading = await getLatestReading(houseIdNumber);
+      const batchPredictions = await predictReadingValues(imageFiles.map(file => file.path));
+
+      frames = imageFiles.map((file, index) => {
+        const framePrediction = batchPredictions[index] || null;
+
+        return {
+          index,
+          filename: file.filename,
+          reading_value: normalizePredictedReading(framePrediction?.reading_value),
+          prediction: framePrediction,
+          prediction_error: framePrediction ? null : "No prediction returned",
+        };
+      });
+
+      const selection = chooseBestFrame(frames, latestReading);
+      selectionReason = selection.reason;
+
+      if (selection.selected) {
+        selectedFile = imageFiles[selection.selected.index];
+        selectedFrame = selection.selected.index;
+        prediction = selection.selected.prediction;
+        readingValue = selection.selected.reading_value;
+
+        if (imageFiles.length > 1 && !keepFrames) {
+          deleteUnselectedBurstFiles(imageFiles, selectedFile);
+        }
+      } else {
+        predictionError = frames.map(frame => frame.prediction_error).filter(Boolean).join(" | ") || "No valid prediction";
+      }
     } catch (err) {
       predictionError = err.message;
     }
   }
 
+  if (manualReading !== null) {
+    selectedFrame = imageFiles.findIndex(file => file.filename === selectedFile.filename);
+  }
+
+  const captureMode = manualReading !== null
+    ? "manual"
+    : imageFiles.length > 1
+      ? "burst"
+      : "single";
+  const avgConf = prediction?.avg_conf ?? null;
+  const framesSummary = imageFiles.length > 1 ? summarizeFrames(frames, selectedFrame) : null;
+
   try {
+    await metadataColumnsReady;
+
     const result = await insertReading({
       houseId: houseIdNumber,
       readingValue,
-      filename: req.file.filename,
+      filename: selectedFile.filename,
+      captureMode,
+      selectedFrame,
+      selectionReason,
+      avgConf,
+      framesSummary,
     });
 
     res.json({
       message: "Upload success",
       id: result.insertId,
-      filename: req.file.filename,
+      filename: selectedFile.filename,
+      filenames: imageFiles.map(file => file.filename),
       house_id: String(houseIdNumber),
       reading_value: readingValue,
       prediction,
       prediction_error: predictionError,
+      burst: imageFiles.length > 1,
+      selected_frame: selectedFrame,
+      selection_reason: selectionReason,
+      avg_conf: avgConf,
+      previous_reading: latestReading,
+      kept_all_frames: keepFrames,
+      frames,
     });
   } catch (err) {
     console.log(err);

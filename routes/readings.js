@@ -2,6 +2,48 @@ const express = require("express");
 const router = express.Router();
 const db = require("../db");
 
+function ensureBillHistoryTable(callback) {
+  const sql = `
+    CREATE TABLE IF NOT EXISTS electric_bills (
+      id INT NOT NULL AUTO_INCREMENT,
+      bill_no VARCHAR(80) NOT NULL,
+      house_id INT NOT NULL,
+      start_month CHAR(7) NOT NULL,
+      end_month CHAR(7) NOT NULL,
+      start_reading FLOAT NOT NULL,
+      end_reading FLOAT NOT NULL,
+      usage_unit FLOAT NOT NULL,
+      unit_rate DECIMAL(10,2) NOT NULL,
+      total_amount DECIMAL(12,2) NOT NULL,
+      start_reading_time DATETIME NULL,
+      end_reading_time DATETIME NULL,
+      issue_date DATETIME NOT NULL,
+      due_date DATETIME NOT NULL,
+      created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      UNIQUE KEY bill_no (bill_no),
+      KEY house_id (house_id),
+      CONSTRAINT electric_bills_ibfk_1 FOREIGN KEY (house_id) REFERENCES houses(id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `;
+
+  db.query(sql, callback);
+}
+
+function normalizeReadingRows(rows) {
+  return rows.map(row => {
+    if (typeof row.frames_summary === "string") {
+      try {
+        row.frames_summary = JSON.parse(row.frames_summary);
+      } catch (err) {
+        row.frames_summary = null;
+      }
+    }
+
+    return row;
+  });
+}
+
 /* GET READINGS */
 router.get("/", (req, res) => {
 
@@ -13,7 +55,8 @@ router.get("/", (req, res) => {
   `;
 
   db.query(sql, (err, result) => {
-    res.json(result);
+    if (err) return res.status(500).json(err);
+    res.json(normalizeReadingRows(result));
   });
 });
 
@@ -293,6 +336,178 @@ router.get("/bill-range", (req, res) => {
       end,
       rate: unitRate,
       rows
+    });
+  });
+
+});
+
+router.get("/bill-history", (req, res) => {
+
+  const houseId = req.query.house_id ? Number(req.query.house_id) : null;
+
+  if (req.query.house_id && (!Number.isInteger(houseId) || houseId <= 0)) {
+    return res.status(400).json({
+      error: "house_id must be a positive integer"
+    });
+  }
+
+  ensureBillHistoryTable((tableErr) => {
+    if (tableErr) {
+      console.log(tableErr);
+      return res.status(500).json({
+        error: "Cannot prepare bill history table"
+      });
+    }
+
+    const params = [];
+    let whereClause = "";
+
+    if (houseId) {
+      whereClause = "WHERE b.house_id = ?";
+      params.push(houseId);
+    }
+
+    const sql = `
+      SELECT
+        b.id,
+        b.bill_no,
+        b.house_id,
+        h.house_name,
+        b.start_month,
+        b.end_month,
+        b.start_reading,
+        b.end_reading,
+        b.usage_unit,
+        b.unit_rate,
+        b.total_amount,
+        b.start_reading_time,
+        b.end_reading_time,
+        b.issue_date,
+        b.due_date,
+        b.created_at
+      FROM electric_bills b
+      JOIN houses h ON h.id = b.house_id
+      ${whereClause}
+      ORDER BY b.created_at DESC, b.id DESC
+      LIMIT 30
+    `;
+
+    db.query(sql, params, (err, rows) => {
+      if (err) {
+        console.log(err);
+        return res.status(500).json(err);
+      }
+
+      res.json(rows);
+    });
+  });
+
+});
+
+router.post("/bill-history", (req, res) => {
+
+  const {
+    bill_no: billNo,
+    start_month: startMonth,
+    end_month: endMonth,
+    start_reading_time: startReadingTime,
+    end_reading_time: endReadingTime,
+    issue_date: issueDate,
+    due_date: dueDate
+  } = req.body;
+
+  const houseId = Number(req.body.house_id);
+  const startReading = Number(req.body.start_reading);
+  const endReading = Number(req.body.end_reading);
+  const usageUnit = Number(req.body.usage_unit);
+  const unitRate = Number(req.body.unit_rate);
+  const totalAmount = Number(req.body.total_amount);
+  const monthPattern = /^\d{4}-\d{2}$/;
+
+  if (!billNo || String(billNo).length > 80) {
+    return res.status(400).json({
+      error: "bill_no is required"
+    });
+  }
+
+  if (!Number.isInteger(houseId) || houseId <= 0) {
+    return res.status(400).json({
+      error: "house_id must be a positive integer"
+    });
+  }
+
+  if (!monthPattern.test(startMonth || "") || !monthPattern.test(endMonth || "")) {
+    return res.status(400).json({
+      error: "start_month and end_month must use YYYY-MM format"
+    });
+  }
+
+  if (
+    !Number.isFinite(startReading) ||
+    !Number.isFinite(endReading) ||
+    !Number.isFinite(usageUnit) ||
+    !Number.isFinite(unitRate) ||
+    !Number.isFinite(totalAmount)
+  ) {
+    return res.status(400).json({
+      error: "bill numeric values are required"
+    });
+  }
+
+  ensureBillHistoryTable((tableErr) => {
+    if (tableErr) {
+      console.log(tableErr);
+      return res.status(500).json({
+        error: "Cannot prepare bill history table"
+      });
+    }
+
+    const sql = `
+      INSERT INTO electric_bills (
+        bill_no,
+        house_id,
+        start_month,
+        end_month,
+        start_reading,
+        end_reading,
+        usage_unit,
+        unit_rate,
+        total_amount,
+        start_reading_time,
+        end_reading_time,
+        issue_date,
+        due_date
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+
+    const params = [
+      billNo,
+      houseId,
+      startMonth,
+      endMonth,
+      startReading,
+      endReading,
+      usageUnit,
+      unitRate,
+      totalAmount,
+      startReadingTime || null,
+      endReadingTime || null,
+      issueDate,
+      dueDate
+    ];
+
+    db.query(sql, params, (err, result) => {
+      if (err) {
+        console.log(err);
+        return res.status(500).json(err);
+      }
+
+      res.status(201).json({
+        message: "Bill history saved",
+        id: result.insertId,
+        bill_no: billNo
+      });
     });
   });
 

@@ -3,16 +3,35 @@ const API = "http://localhost:3000/api";
 let allReadings = [];
 let allHouses = [];
 let editingReadingId = null;
+let currentReadingPage = 1;
+let lastReadingFilterSignature = "";
 const HIGH_USAGE_WARNING = 2000;
+const DEFAULT_READING_SORT = "house_time";
+const DEFAULT_READING_STATUS = "";
 
 window.addEventListener("load", async () => {
   await loadHouses();
   await loadMeterReadings();
 });
 
+function parseDateValue(value) {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+
+  const text = String(value);
+
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(text)) {
+    return new Date(text.replace(" ", "T"));
+  }
+
+  return new Date(text);
+}
+
 function formatReadingTime(value) {
   if (!value) return "-";
-  return new Date(value).toLocaleString("th-TH");
+  const date = parseDateValue(value);
+  if (!date || Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleString("th-TH");
 }
 
 function formatReadingValue(value) {
@@ -116,6 +135,17 @@ async function loadMeterReadings() {
   allReadings = await res.json();
   populateReadingFilters();
   renderReadings();
+  openLinkedReadingEditor();
+}
+
+function openLinkedReadingEditor() {
+  const params = new URLSearchParams(window.location.search);
+  const readingId = Number(params.get("reading_id"));
+
+  if (!Number.isInteger(readingId) || readingId <= 0) return;
+  if (!allReadings.some(item => Number(item.id) === readingId)) return;
+
+  openReadingEditor(readingId);
 }
 
 function populateReadingFilters() {
@@ -153,14 +183,32 @@ function renderReadings() {
   const keyword = document.getElementById("searchHouse")?.value.toLowerCase() || "";
   const filterHouse = document.getElementById("filterHouse")?.value || "";
   const filterMonth = document.getElementById("filterMonth")?.value || "";
-  const filterStatus = document.getElementById("filterStatus")?.value || "";
-  const sort = document.getElementById("sortType")?.value || "latest";
+  const filterDate = document.getElementById("filterDate")?.value || "";
+  const filterStatusElement = document.getElementById("filterStatus");
+  const filterStatus = filterStatusElement ? filterStatusElement.value : DEFAULT_READING_STATUS;
+  const sort = document.getElementById("sortType")?.value || DEFAULT_READING_SORT;
+  const pageSize = Number(document.getElementById("readingPageSize")?.value || 25);
+  const filterSignature = JSON.stringify({
+    keyword,
+    filterHouse,
+    filterMonth,
+    filterDate,
+    filterStatus,
+    sort,
+    pageSize,
+  });
   const statusMap = buildReadingStatusMap(allReadings);
+
+  if (filterSignature !== lastReadingFilterSignature) {
+    currentReadingPage = 1;
+    lastReadingFilterSignature = filterSignature;
+  }
 
   let data = allReadings.filter(r =>
     String(r.house_name || "").toLowerCase().includes(keyword)
     && (!filterHouse || String(r.house_id) === filterHouse)
     && (!filterMonth || getMonthKey(r.reading_time) === filterMonth)
+    && (!filterDate || getDateKey(r.reading_time) === filterDate)
     && matchesStatusFilter(statusMap.get(Number(r.id)), filterStatus)
   );
 
@@ -185,19 +233,37 @@ function renderReadings() {
       break;
   }
 
+  const totalFiltered = data.length;
+  const totalPages = Math.max(1, Math.ceil(totalFiltered / pageSize));
+  currentReadingPage = Math.min(Math.max(currentReadingPage, 1), totalPages);
+  const pageStart = (currentReadingPage - 1) * pageSize;
+  const pageRows = data.slice(pageStart, pageStart + pageSize);
+
   table.innerHTML = "";
 
-  if (data.length === 0) {
+  if (pageRows.length === 0) {
+    const isNeedsReviewFilter = filterStatus === "needs_review";
+    const emptyMessage = isNeedsReviewFilter
+      ? `ไม่มีรายการที่ต้องตรวจสอบในขณะนี้ จากทั้งหมด ${allReadings.length.toLocaleString("th-TH")} รายการ`
+      : "ไม่พบข้อมูลการอ่านค่าที่ตรงกับตัวกรอง";
+    const emptyAction = isNeedsReviewFilter
+      ? `<button class="btn btn-sm btn-primary mt-2" type="button" onclick="showAllMeterReadings()">ดูรายการทั้งหมด</button>`
+      : "";
+
     table.innerHTML = `
       <tr>
-        <td colspan="6" class="text-center text-muted py-4">ไม่พบข้อมูลการอ่านค่า</td>
+        <td colspan="6" class="text-center text-muted py-4">
+          <div>${emptyMessage}</div>
+          ${emptyAction}
+        </td>
       </tr>
     `;
-    updateReadingResultCount(0);
+    updateReadingResultCount(0, 0, 0);
+    renderReadingPagination(0, 1, pageSize);
     return;
   }
 
-  data.forEach(reading => {
+  pageRows.forEach(reading => {
     const status = statusMap.get(Number(reading.id)) || getReadingStatus(reading, null);
     table.innerHTML += `
       <tr>
@@ -231,7 +297,8 @@ function renderReadings() {
     `;
   });
 
-  updateReadingResultCount(data.length);
+  updateReadingResultCount(totalFiltered, pageStart + 1, pageStart + pageRows.length);
+  renderReadingPagination(totalFiltered, totalPages, pageSize);
 }
 
 function buildReadingStatusMap(readings) {
@@ -278,18 +345,98 @@ function renderStatusBadge(status) {
   return `<span class="reading-status-badge ${escapeHtml(status.level)}">${escapeHtml(status.label)}</span>`;
 }
 
+function formatConfidence(value) {
+  const confidence = Number(value);
+  if (!Number.isFinite(confidence)) return "-";
+  return `${(confidence * 100).toFixed(1)}%`;
+}
+
+function formatCaptureMode(value) {
+  if (value === "burst") return "Burst หลายเฟรม";
+  if (value === "manual") return "กรอกเลขเอง";
+  if (value === "single") return "ภาพเดี่ยว";
+  return "-";
+}
+
+function renderFrameMetadata(reading) {
+  const container = document.getElementById("reviewFrameMeta");
+  if (!container) return;
+
+  const frames = Array.isArray(reading.frames_summary)
+    ? reading.frames_summary
+    : [];
+
+  if (!reading.capture_mode && frames.length === 0) {
+    container.innerHTML = `
+      <div class="frame-meta-empty">
+        ยังไม่มีข้อมูลการเลือกเฟรมสำหรับรายการนี้
+      </div>
+    `;
+    return;
+  }
+
+  const selectedFrame = Number.isInteger(Number(reading.selected_frame))
+    ? Number(reading.selected_frame)
+    : null;
+
+  container.innerHTML = `
+    <div class="frame-meta-header">
+      <div>
+        <span>ข้อมูลการอ่านจากกล้อง</span>
+        <strong>${formatCaptureMode(reading.capture_mode)}</strong>
+      </div>
+      <span class="frame-meta-badge">${frames.length ? `${frames.length} เฟรม` : "1 ภาพ"}</span>
+    </div>
+    <dl class="frame-meta-list">
+      <div>
+        <dt>เฟรมที่เลือก</dt>
+        <dd>${selectedFrame !== null && selectedFrame >= 0 ? selectedFrame + 1 : "-"}</dd>
+      </div>
+      <div>
+        <dt>เหตุผล</dt>
+        <dd>${escapeHtml(reading.selection_reason || "-")}</dd>
+      </div>
+      <div>
+        <dt>Confidence</dt>
+        <dd>${formatConfidence(reading.avg_conf)}</dd>
+      </div>
+    </dl>
+    ${
+      frames.length
+        ? `<div class="frame-summary-list">
+            ${frames.map(frame => `
+              <div class="frame-summary-item ${frame.selected ? "selected" : ""}">
+                <span>เฟรม ${Number(frame.index) + 1}</span>
+                <strong>${frame.reading_value ?? "-"} kWh</strong>
+                <small>${formatConfidence(frame.avg_conf)} · ${frame.boxes ?? "-"} กล่อง</small>
+              </div>
+            `).join("")}
+          </div>`
+        : ""
+    }
+  `;
+}
+
 function matchesStatusFilter(status, filter) {
   if (!filter) return true;
   if (!status) return false;
+  if (filter === "needs_review") return status.level !== "ok";
   if (filter === "warn") return status.level === "warn";
   if (filter === "missing_image") return status.key === "missing_image";
   return status.level === filter || status.key === filter;
 }
 
+function getDateKey(value) {
+  if (!value) return "";
+  const date = parseDateValue(value);
+  if (!date || Number.isNaN(date.getTime())) return "";
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
 function getMonthKey(value) {
   if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
+  const date = parseDateValue(value);
+  if (!date || Number.isNaN(date.getTime())) return "";
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
 
@@ -298,21 +445,78 @@ function formatMonthLabel(monthKey) {
   return `${month}/${year}`;
 }
 
-function updateReadingResultCount(count) {
+function updateReadingResultCount(count, start = 0, end = 0) {
   const result = document.getElementById("readingResultCount");
-  if (result) result.innerText = `แสดง ${count.toLocaleString("th-TH")} รายการ จากทั้งหมด ${allReadings.length.toLocaleString("th-TH")} รายการ`;
+  if (!result) return;
+
+  if (count === 0) {
+    result.innerText = `ไม่พบรายการที่ตรงกับตัวกรอง จากทั้งหมด ${allReadings.length.toLocaleString("th-TH")} รายการ`;
+    return;
+  }
+
+  result.innerText = `แสดง ${start.toLocaleString("th-TH")}-${end.toLocaleString("th-TH")} จาก ${count.toLocaleString("th-TH")} รายการที่ตรงกับตัวกรอง / ทั้งหมด ${allReadings.length.toLocaleString("th-TH")} รายการ`;
+}
+
+function renderReadingPagination(totalFiltered, totalPages, pageSize) {
+  const container = document.getElementById("readingPagination");
+  if (!container) return;
+
+  if (totalFiltered <= pageSize) {
+    container.innerHTML = "";
+    return;
+  }
+
+  container.innerHTML = `
+    <button
+      class="chart-nav-btn"
+      type="button"
+      onclick="changeReadingPage(-1)"
+      ${currentReadingPage <= 1 ? "disabled" : ""}
+      aria-label="หน้าก่อนหน้า"
+    >&lt;</button>
+    <span class="chart-counter">${currentReadingPage.toLocaleString("th-TH")} / ${totalPages.toLocaleString("th-TH")}</span>
+    <button
+      class="chart-nav-btn"
+      type="button"
+      onclick="changeReadingPage(1)"
+      ${currentReadingPage >= totalPages ? "disabled" : ""}
+      aria-label="หน้าถัดไป"
+    >&gt;</button>
+  `;
+}
+
+function changeReadingPage(direction) {
+  currentReadingPage += direction;
+  renderReadings();
+}
+
+function showAllMeterReadings() {
+  const filterStatus = document.getElementById("filterStatus");
+  if (filterStatus) filterStatus.value = "";
+
+  currentReadingPage = 1;
+  lastReadingFilterSignature = "";
+  renderReadings();
 }
 
 function resetReadingFilters() {
-  const ids = ["searchHouse", "filterHouse", "filterMonth", "filterStatus"];
+  const ids = ["searchHouse", "filterHouse", "filterMonth", "filterDate"];
   ids.forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = "";
   });
 
-  const sortType = document.getElementById("sortType");
-  if (sortType) sortType.value = "latest";
+  const filterStatus = document.getElementById("filterStatus");
+  if (filterStatus) filterStatus.value = DEFAULT_READING_STATUS;
 
+  const sortType = document.getElementById("sortType");
+  if (sortType) sortType.value = DEFAULT_READING_SORT;
+
+  const pageSize = document.getElementById("readingPageSize");
+  if (pageSize) pageSize.value = "25";
+
+  currentReadingPage = 1;
+  lastReadingFilterSignature = "";
   renderReadings();
 }
 
@@ -339,6 +543,7 @@ function openReadingEditor(id) {
     empty.classList.remove("d-none");
   }
 
+  renderFrameMetadata(reading);
   document.getElementById("readingEditModal").classList.remove("d-none");
 }
 

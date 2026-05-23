@@ -24,6 +24,30 @@ SET time_zone = "+00:00";
 -- --------------------------------------------------------
 
 --
+-- Table structure for table `electric_bills`
+--
+
+CREATE TABLE `electric_bills` (
+  `id` int(11) NOT NULL,
+  `bill_no` varchar(80) NOT NULL,
+  `house_id` int(11) NOT NULL,
+  `start_month` char(7) NOT NULL,
+  `end_month` char(7) NOT NULL,
+  `start_reading` float NOT NULL,
+  `end_reading` float NOT NULL,
+  `usage_unit` float NOT NULL,
+  `unit_rate` decimal(10,2) NOT NULL,
+  `total_amount` decimal(12,2) NOT NULL,
+  `start_reading_time` datetime DEFAULT NULL,
+  `end_reading_time` datetime DEFAULT NULL,
+  `issue_date` datetime NOT NULL,
+  `due_date` datetime NOT NULL,
+  `created_at` timestamp NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `houses`
 --
 
@@ -56,7 +80,12 @@ CREATE TABLE `meter_readings` (
   `house_id` int(11) NOT NULL,
   `reading_value` float DEFAULT NULL,
   `image_filename` varchar(255) DEFAULT NULL,
-  `reading_time` timestamp NULL DEFAULT current_timestamp()
+  `reading_time` timestamp NULL DEFAULT current_timestamp(),
+  `capture_mode` varchar(20) DEFAULT 'single',
+  `selected_frame` int(11) DEFAULT NULL,
+  `selection_reason` varchar(80) DEFAULT NULL,
+  `avg_conf` float DEFAULT NULL,
+  `frames_summary` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`frames_summary`))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
 
 --
@@ -96,6 +125,14 @@ ALTER TABLE `houses`
   ADD PRIMARY KEY (`id`);
 
 --
+-- Indexes for table `electric_bills`
+--
+ALTER TABLE `electric_bills`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `bill_no` (`bill_no`),
+  ADD KEY `house_id` (`house_id`);
+
+--
 -- Indexes for table `meter_readings`
 --
 ALTER TABLE `meter_readings`
@@ -113,6 +150,12 @@ ALTER TABLE `houses`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=13;
 
 --
+-- AUTO_INCREMENT for table `electric_bills`
+--
+ALTER TABLE `electric_bills`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
 -- AUTO_INCREMENT for table `meter_readings`
 --
 ALTER TABLE `meter_readings`
@@ -121,6 +164,12 @@ ALTER TABLE `meter_readings`
 --
 -- Constraints for dumped tables
 --
+
+--
+-- Constraints for table `electric_bills`
+--
+ALTER TABLE `electric_bills`
+  ADD CONSTRAINT `electric_bills_ibfk_1` FOREIGN KEY (`house_id`) REFERENCES `houses` (`id`);
 
 --
 -- Constraints for table `meter_readings`

@@ -1,9 +1,12 @@
-let latestChart;
+let dailyCharts = [];
 let activeHousePage = 0;
+let activeDailyCalendarHouseId = null;
 let dailyHouseState = {
   houses: [],
   latestReadings: [],
   readingGroups: {},
+  chartDateKeys: {},
+  chartCalendarMonths: {},
 };
 
 const HOUSE_PAGE_SIZE = 3;
@@ -24,13 +27,16 @@ async function initDashboard() {
     houses: activeHouses,
     latestReadings,
     readingGroups,
+    chartDateKeys: buildInitialChartDateKeys(activeHouses, readingGroups),
+    chartCalendarMonths: buildInitialCalendarMonths(activeHouses, readingGroups),
   };
 
   setupHousePager();
+  setupDailyChartDateControls();
   renderHouseCards();
 
   renderSummary(activeHouses, latestReadings, readingWarnings);
-  renderLatestChart(latestReadings);
+  renderDailyHouseCharts(activeHouses, readingGroups);
   renderRecentReadings(allReadings.slice(0, 8));
 }
 
@@ -47,6 +53,100 @@ function groupReadingsByHouse(readings) {
     groups[key].push(reading);
     return groups;
   }, {});
+}
+
+function parseDateValue(value) {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+
+  const text = String(value);
+
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(text)) {
+    return new Date(text.replace(" ", "T"));
+  }
+
+  return new Date(text);
+}
+
+function getDateKey(date) {
+  if (!date || Number.isNaN(date.getTime())) return "";
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function getLatestReadingDateKey(readings) {
+  const latest = readings
+    .map(reading => parseDateValue(reading.reading_time))
+    .filter(date => date && !Number.isNaN(date.getTime()))
+    .sort((a, b) => b - a)[0];
+
+  return getDateKey(latest);
+}
+
+function getHouseDateKeys(readings) {
+  return [
+    ...new Set(
+      readings
+        .map(reading => parseDateValue(reading.reading_time))
+        .filter(date => date && !Number.isNaN(date.getTime()))
+        .map(getDateKey)
+        .filter(Boolean),
+    ),
+  ].sort();
+}
+
+function buildInitialChartDateKeys(houses, readingGroups) {
+  return houses.reduce((keys, house) => {
+    const readings = readingGroups[String(house.id)] || [];
+    keys[String(house.id)] = getLatestReadingDateKey(readings);
+    return keys;
+  }, {});
+}
+
+function getSelectedChartDateKey(houseId, readings) {
+  const dateKeys = getHouseDateKeys(readings);
+  const selected = dailyHouseState.chartDateKeys[String(houseId)];
+
+  if (dateKeys.includes(selected)) return selected;
+  return dateKeys[dateKeys.length - 1] || "";
+}
+
+function getMonthKeyFromDateKey(dateKey) {
+  return dateKey ? dateKey.slice(0, 7) : "";
+}
+
+function buildInitialCalendarMonths(houses, readingGroups) {
+  return houses.reduce((months, house) => {
+    const readings = readingGroups[String(house.id)] || [];
+    months[String(house.id)] = getMonthKeyFromDateKey(getLatestReadingDateKey(readings));
+    return months;
+  }, {});
+}
+
+function getSelectedCalendarMonthKey(houseId, selectedDateKey) {
+  const savedMonth = dailyHouseState.chartCalendarMonths[String(houseId)];
+  return savedMonth || getMonthKeyFromDateKey(selectedDateKey);
+}
+
+function shiftMonthKey(monthKey, amount) {
+  if (!monthKey) return "";
+
+  const [year, month] = monthKey.split("-").map(Number);
+  const date = new Date(year, month - 1 + amount, 1);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function formatThaiMonthYear(monthKey) {
+  if (!monthKey) return "-";
+  const [year, month] = monthKey.split("-").map(Number);
+  return new Date(year, month - 1, 1).toLocaleDateString("th-TH", {
+    month: "long",
+    year: "numeric",
+  });
 }
 
 function renderSummary(houses, latestReadings, warnings) {
@@ -81,6 +181,65 @@ function setupHousePager() {
     activeHousePage += 1;
     renderHouseCards();
   });
+}
+
+function setupDailyChartDateControls() {
+  const container = document.getElementById("dailyHouseCharts");
+  if (!container) return;
+
+  container.addEventListener("click", event => {
+    const calendarButton = event.target.closest(".daily-chart-calendar-toggle");
+    if (calendarButton) {
+      const houseId = String(calendarButton.dataset.houseId);
+      activeDailyCalendarHouseId =
+        activeDailyCalendarHouseId === houseId ? null : houseId;
+      renderDailyHouseCharts(dailyHouseState.houses, dailyHouseState.readingGroups);
+      return;
+    }
+
+    const calendarMonthButton = event.target.closest(".daily-calendar-month-btn");
+    if (calendarMonthButton) {
+      const houseId = String(calendarMonthButton.dataset.houseId);
+      const selectedDateKey = dailyHouseState.chartDateKeys[houseId] || "";
+      const currentMonth = getSelectedCalendarMonthKey(houseId, selectedDateKey);
+      const step = calendarMonthButton.dataset.direction === "next" ? 1 : -1;
+      dailyHouseState.chartCalendarMonths[houseId] = shiftMonthKey(currentMonth, step);
+      activeDailyCalendarHouseId = houseId;
+      renderDailyHouseCharts(dailyHouseState.houses, dailyHouseState.readingGroups);
+      return;
+    }
+
+    const calendarDay = event.target.closest(".daily-calendar-day.has-data");
+    if (calendarDay) {
+      const houseId = String(calendarDay.dataset.houseId);
+      dailyHouseState.chartDateKeys[houseId] = calendarDay.dataset.dateKey;
+      dailyHouseState.chartCalendarMonths[houseId] = getMonthKeyFromDateKey(calendarDay.dataset.dateKey);
+      activeDailyCalendarHouseId = null;
+      renderDailyHouseCharts(dailyHouseState.houses, dailyHouseState.readingGroups);
+      return;
+    }
+
+    const button = event.target.closest(".daily-chart-day-btn");
+    if (!button) return;
+
+    changeDailyChartDate(button.dataset.houseId, button.dataset.direction);
+  });
+}
+
+function changeDailyChartDate(houseId, direction) {
+  const readings = dailyHouseState.readingGroups[String(houseId)] || [];
+  const dateKeys = getHouseDateKeys(readings);
+  const currentDateKey = getSelectedChartDateKey(houseId, readings);
+  const currentIndex = dateKeys.indexOf(currentDateKey);
+  const step = direction === "next" ? 1 : -1;
+  const nextIndex = currentIndex + step;
+
+  if (nextIndex < 0 || nextIndex >= dateKeys.length) return;
+
+  const nextDateKey = dateKeys[nextIndex];
+  dailyHouseState.chartDateKeys[String(houseId)] = nextDateKey;
+  dailyHouseState.chartCalendarMonths[String(houseId)] = getMonthKeyFromDateKey(nextDateKey);
+  renderDailyHouseCharts(dailyHouseState.houses, dailyHouseState.readingGroups);
 }
 
 function renderHouseCards() {
@@ -139,7 +298,7 @@ function renderHouseCards() {
                 <dd>${latest?.image_filename ? "มีรูป" : "ไม่มีรูป"}</dd>
               </div>
             </dl>
-            <a class="btn btn-sm btn-primary" href="/admin">ตรวจ/แก้เลข</a>
+            <a class="btn btn-sm btn-primary" href="/admin?reading_id=${latest?.reading_id || latest?.id || ""}">ตรวจ/แก้เลข</a>
           </div>
         </div>
       </article>
@@ -186,44 +345,261 @@ function renderReadingImage(reading) {
   `;
 }
 
-function renderLatestChart(latestReadings) {
-  const canvas = document.getElementById("totalUsageChart");
-  if (!canvas) return;
+function renderDailyChartCalendar(houseId, dateKeys, selectedDateKey, monthKey) {
+  if (!monthKey) {
+    return `
+      <div class="daily-calendar-popover">
+        <p class="empty-note mb-0">ไม่มีข้อมูลวันที่สำหรับบ้านนี้</p>
+      </div>
+    `;
+  }
 
-  if (latestChart) latestChart.destroy();
+  const availableDates = new Set(dateKeys);
+  const [year, month] = monthKey.split("-").map(Number);
+  const firstDate = new Date(year, month - 1, 1);
+  const firstDay = firstDate.getDay();
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const minMonthKey = getMonthKeyFromDateKey(dateKeys[0]);
+  const maxMonthKey = getMonthKeyFromDateKey(dateKeys[dateKeys.length - 1]);
+  const prevMonthDisabled = minMonthKey ? shiftMonthKey(monthKey, -1) < minMonthKey : true;
+  const nextMonthDisabled = maxMonthKey ? shiftMonthKey(monthKey, 1) > maxMonthKey : true;
+  const cells = [];
 
-  latestChart = new Chart(canvas.getContext("2d"), {
-    type: "bar",
+  for (let i = 0; i < firstDay; i += 1) cells.push(`<span class="daily-calendar-day blank"></span>`);
+
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    const dateKey = `${monthKey}-${String(day).padStart(2, "0")}`;
+    const hasData = availableDates.has(dateKey);
+    const isSelected = dateKey === selectedDateKey;
+
+    cells.push(`
+      <button
+        class="daily-calendar-day ${hasData ? "has-data" : "no-data"} ${isSelected ? "selected" : ""}"
+        type="button"
+        data-house-id="${houseId}"
+        data-date-key="${dateKey}"
+        ${hasData ? "" : "disabled"}
+        title="${hasData ? "มีข้อมูลมิเตอร์" : "ไม่มีข้อมูล"}"
+      >
+        ${day}
+      </button>
+    `);
+  }
+
+  return `
+    <div class="daily-calendar-popover">
+      <div class="daily-calendar-header">
+        <button
+          class="daily-calendar-month-btn"
+          type="button"
+          data-house-id="${houseId}"
+          data-direction="prev"
+          ${prevMonthDisabled ? "disabled" : ""}
+          aria-label="เดือนก่อนหน้า"
+        >&lt;</button>
+        <strong>${formatThaiMonthYear(monthKey)}</strong>
+        <button
+          class="daily-calendar-month-btn"
+          type="button"
+          data-house-id="${houseId}"
+          data-direction="next"
+          ${nextMonthDisabled ? "disabled" : ""}
+          aria-label="เดือนถัดไป"
+        >&gt;</button>
+      </div>
+      <div class="daily-calendar-weekdays">
+        <span>อา</span>
+        <span>จ</span>
+        <span>อ</span>
+        <span>พ</span>
+        <span>พฤ</span>
+        <span>ศ</span>
+        <span>ส</span>
+      </div>
+      <div class="daily-calendar-grid">
+        ${cells.join("")}
+      </div>
+      <div class="daily-calendar-legend">
+        <span><i class="has-data"></i>มีข้อมูล</span>
+        <span><i class="no-data"></i>ไม่มีข้อมูล</span>
+      </div>
+    </div>
+  `;
+}
+
+function renderDailyHouseCharts(houses, readingGroups) {
+  const container = document.getElementById("dailyHouseCharts");
+  if (!container) return;
+
+  dailyCharts.forEach(chart => chart.destroy());
+  dailyCharts = [];
+
+  if (!houses.length) {
+    container.innerHTML = `<p class="empty-note">ยังไม่มีบ้านที่เปิดใช้งาน</p>`;
+    return;
+  }
+
+  const hourLabels = Array.from({ length: 24 }, (_, hour) =>
+    `${String(hour).padStart(2, "0")}:00`,
+  );
+
+  container.innerHTML = houses.map(house => {
+    const readings = readingGroups[String(house.id)] || [];
+    const dateKeys = getHouseDateKeys(readings);
+    const dateKey = getSelectedChartDateKey(house.id, readings);
+    const dateIndex = dateKeys.indexOf(dateKey);
+    const displayDate = dateKey ? formatThaiDateOnly(`${dateKey} 00:00:00`) : "-";
+    const prevDisabled = dateIndex <= 0;
+    const nextDisabled = dateIndex < 0 || dateIndex >= dateKeys.length - 1;
+    const houseId = String(house.id);
+    const calendarMonthKey = getSelectedCalendarMonthKey(houseId, dateKey);
+    const isCalendarOpen = activeDailyCalendarHouseId === houseId;
+
+    return `
+      <article class="daily-house-chart-card">
+        <div class="daily-house-chart-header">
+          <div>
+            <span>${house.house_name}</span>
+            <strong>ค่ามิเตอร์รายชั่วโมง</strong>
+          </div>
+          <div class="daily-chart-day-nav" aria-label="เลือกวันที่ของกราฟ ${house.house_name}">
+            <button
+              class="chart-nav-btn daily-chart-day-btn"
+              type="button"
+              data-house-id="${house.id}"
+              data-direction="prev"
+              ${prevDisabled ? "disabled" : ""}
+              aria-label="วันก่อนหน้าของ ${house.house_name}"
+            >&lt;</button>
+            <div>
+              <p>${displayDate}</p>
+              <button
+                class="daily-chart-calendar-toggle"
+                type="button"
+                data-house-id="${house.id}"
+                aria-label="เลือกวันที่ย้อนหลังของ ${house.house_name}"
+                ${dateKeys.length === 0 ? "disabled" : ""}
+              >
+                เลือกวันที่
+              </button>
+              ${isCalendarOpen ? renderDailyChartCalendar(house.id, dateKeys, dateKey, calendarMonthKey) : ""}
+            </div>
+            <button
+              class="chart-nav-btn daily-chart-day-btn"
+              type="button"
+              data-house-id="${house.id}"
+              data-direction="next"
+              ${nextDisabled ? "disabled" : ""}
+              aria-label="วันถัดไปของ ${house.house_name}"
+            >&gt;</button>
+          </div>
+        </div>
+        <div class="chart-frame daily-chart-frame">
+          <canvas id="dailyHouseChart-${house.id}"></canvas>
+        </div>
+      </article>
+    `;
+  }).join("");
+
+  houses.forEach((house, index) => {
+    const readings = readingGroups[String(house.id)] || [];
+    const dateKey = getSelectedChartDateKey(house.id, readings);
+    const hourlyValues = buildHourlyMeterSeries(readings, dateKey);
+    const canvas = document.getElementById(`dailyHouseChart-${house.id}`);
+
+    if (!canvas) return;
+
+    dailyCharts.push(createDailyMeterChart(
+      canvas,
+      house.house_name,
+      hourLabels,
+      hourlyValues,
+      index,
+    ));
+  });
+}
+
+function buildHourlyMeterSeries(readings, dateKey) {
+  const hourly = Array(24).fill(null);
+
+  readings
+    .filter(reading => reading.reading_value != null)
+    .map(reading => ({
+      ...reading,
+      parsedDate: parseDateValue(reading.reading_time),
+    }))
+    .filter(reading =>
+      reading.parsedDate &&
+      !Number.isNaN(reading.parsedDate.getTime()) &&
+      getDateKey(reading.parsedDate) === dateKey
+    )
+    .sort((a, b) => a.parsedDate - b.parsedDate || Number(a.id) - Number(b.id))
+    .forEach(reading => {
+      hourly[reading.parsedDate.getHours()] = Number(reading.reading_value);
+    });
+
+  return hourly;
+}
+
+function createDailyMeterChart(canvas, houseName, labels, data, index) {
+  const palette = ["#093C5D", "#3B7597", "#0F9F9A", "#5DF8D8"];
+  const color = palette[index % palette.length];
+
+  return new Chart(canvas.getContext("2d"), {
+    type: "line",
     data: {
-      labels: latestReadings.map(row => row.house_name),
+      labels,
       datasets: [{
-        label: "เลขมิเตอร์สะสมล่าสุด (kWh)",
-        data: latestReadings.map(row => Number(row.reading_value) || 0),
-        backgroundColor: ["#093C5D", "#3B7597", "#6FD1D7", "#5DF8D8"],
-        borderRadius: 8,
-        maxBarThickness: 78,
+        label: houseName,
+        data,
+        borderColor: color,
+        backgroundColor: "rgba(111, 209, 215, 0.18)",
+        borderWidth: 3,
+        pointRadius: 4,
+        pointHoverRadius: 6,
+        pointBackgroundColor: "#ffffff",
+        pointBorderColor: color,
+        pointBorderWidth: 2,
+        tension: 0.35,
+        spanGaps: false,
+        fill: true,
       }],
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      interaction: {
+        mode: "nearest",
+        intersect: false,
+      },
       plugins: {
         legend: {
-          labels: {
-            boxWidth: 12,
-            color: "#17212f",
-            font: { weight: "800" },
+          display: false,
+        },
+        tooltip: {
+          callbacks: {
+            label: context => `เลขมิเตอร์: ${formatMeter(context.parsed.y)} kWh`,
           },
         },
       },
       scales: {
-        x: { grid: { display: false }, ticks: { color: "#344054", font: { weight: "800" } } },
+        x: {
+          grid: { color: "rgba(148, 163, 184, 0.16)" },
+          ticks: {
+            color: "#344054",
+            font: { size: 10, weight: "800" },
+            maxRotation: 0,
+            autoSkip: true,
+            maxTicksLimit: 8,
+          },
+        },
         y: {
-          beginAtZero: true,
+          beginAtZero: false,
           grid: { color: "rgba(148, 163, 184, 0.18)" },
           ticks: {
             color: "#093C5D",
-            font: { weight: "800" },
+            font: { size: 10, weight: "800" },
+            maxTicksLimit: 5,
             callback: value => Number(value).toLocaleString("th-TH"),
           },
         },
@@ -251,7 +627,7 @@ function renderRecentReadings(readings) {
         <strong>${formatMeter(reading.reading_value)} kWh</strong>
         <p>${formatThaiDate(reading.reading_time)}</p>
       </div>
-      <a class="btn btn-sm btn-outline-primary" href="/admin">ตรวจ</a>
+      <a class="btn btn-sm btn-outline-primary" href="/admin?reading_id=${reading.id}">ตรวจ</a>
     </article>
   `).join("");
 }
@@ -269,11 +645,26 @@ function formatDelta(latest, previous) {
 
 function formatThaiDate(value) {
   if (!value) return "-";
-  return new Date(value).toLocaleString("th-TH", {
+  const date = parseDateValue(value);
+  if (!date || Number.isNaN(date.getTime())) return "-";
+
+  return date.toLocaleString("th-TH", {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
+  });
+}
+
+function formatThaiDateOnly(value) {
+  if (!value) return "-";
+  const date = parseDateValue(value);
+  if (!date || Number.isNaN(date.getTime())) return "-";
+
+  return date.toLocaleDateString("th-TH", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
   });
 }
