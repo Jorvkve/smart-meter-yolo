@@ -13,7 +13,7 @@ This is a Smart Meter backend and static dashboard project. It combines:
 
 Open TODO:
 
-- `TODO.md` tracks the next ESP32-CAM step: update the firmware to capture 3-5 frames and send them as burst `images` uploads. The backend already supports burst selection.
+- `TODO.md` tracks the ESP32-CAM burst flow: the experimental firmware captures 10 frames and sends them as burst `images` uploads. The backend selects the best frame.
 - `TODO.md` also tracks the monthly billing cutoff issue: `/monthly` currently uses the first reading of each month, but it should eventually choose readings nearest a configured billing cutoff day/time.
 - Target sampling policy: daily dashboard readings should be selected snapshots every 1 or 3 hours; monthly billing should use the configured billing cutoff; near each scheduled reading, ESP32-CAM should run a 5-minute burst window with one frame every 30 seconds, then store only the selected best reading.
 - Experimental scheduled burst firmware lives in `wifi_pic_tune_burst/wifi_pic_tune_burst.ino`. Keep `wifi_pic_tune/wifi_pic_tune.ino` as the stable single-image sketch unless the user explicitly asks to change it.

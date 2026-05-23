@@ -89,7 +89,14 @@ router.post("/", (req, res) => {
 
 router.get("/", (req, res) => {
   const sql = `
-    SELECT d.*, h.house_name
+    SELECT
+      d.*,
+      h.house_name,
+      TIMESTAMPDIFF(SECOND, d.last_seen, NOW()) AS seconds_since_seen,
+      CASE
+        WHEN TIMESTAMPDIFF(SECOND, d.last_seen, NOW()) <= 600 THEN 1
+        ELSE 0
+      END AS is_online
     FROM device_heartbeats d
     LEFT JOIN houses h ON h.id = d.house_id
     ORDER BY d.last_seen DESC

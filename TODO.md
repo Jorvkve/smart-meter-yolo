@@ -8,7 +8,7 @@
 
 - ใช้ไฟล์ `wifi_pic_tune_burst/wifi_pic_tune_burst.ino` สำหรับโหมด burst
 - ตัว stable รูปเดียวอยู่ที่ `wifi_pic_tune/wifi_pic_tune.ino` และยังไม่ควรแก้ถ้าไม่ได้ตั้งใจ
-- Burst ตอนนี้ตั้งเป็น 10 เฟรม ห่างกัน 10 วินาที
+- Burst ตอนนี้ตั้งเป็น 10 เฟรม ห่างกัน 30 วินาที เพื่อให้ backend คัดภาพจากช่วงเวลาประมาณ 5 นาที
 - รอบถ่ายปัจจุบันตั้งเป็นทุก 1 ชั่วโมง
 - Backend รองรับ burst แล้ว โดยอ่านทุกเฟรม เลือกเฟรมที่ดีที่สุด และบันทึกเฉพาะค่าที่เลือกลง `meter_readings`
 - Metadata ของ burst ถูกเก็บใน `meter_readings` แล้ว เช่น `capture_mode`, `selected_frame`, `selection_reason`, `avg_conf`, `frames_summary`

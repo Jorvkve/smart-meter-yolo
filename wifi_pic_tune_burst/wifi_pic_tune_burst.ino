@@ -6,7 +6,7 @@
 
   Flow:
   1. Wait for a scheduled reading interval.
-  2. Capture a burst: 10 frames, 10 seconds apart.
+  2. Capture a burst: 10 frames, 30 seconds apart.
   3. Upload all frames in one multipart request using field name "images".
   4. Backend selects the best reading and stores only that selected value.
 
@@ -28,8 +28,8 @@
 const char* ssid = "Jorvkve_2.4G";
 const char* password = "Tewit8123";
 
-const char* serverUrl = "http://192.168.1.146:3000/api/upload";
-const char* heartbeatUrl = "http://192.168.1.146:3000/api/device-ping";
+const char* serverUrl = "http://192.168.1.157:3000/api/upload";
+const char* heartbeatUrl = "http://192.168.1.157:3000/api/device-ping";
 const char* houseId = "14";
 const char* deviceId = "esp32cam-house-14";
 
@@ -48,10 +48,10 @@ const int ambientWarmupMs = 1200;
 
 /* ================= Scheduled Burst Policy ================= */
 const bool runBurstOnBoot = false;
-const unsigned long scheduledIntervalMs = 60UL * 60UL * 1000UL; // ทุก 1 ชั่วโมง
-const unsigned long heartbeatIntervalMs = 5UL * 60UL * 1000UL; // ทุก 5 นาที
+const unsigned long scheduledIntervalMs = 60UL * 60UL * 1000UL; // every 1 hour
+const unsigned long heartbeatIntervalMs = 5UL * 60UL * 1000UL; // every 5 minutes
 const int burstFrameCount = 10;
-const unsigned long burstFrameIntervalMs = 10000; // ห่างกัน 10 วินาที
+const unsigned long burstFrameIntervalMs = 30000; // 30 seconds apart
 
 #define RED_LED 33
 
@@ -324,9 +324,13 @@ bool uploadBurstFrames(int captured) {
     "--" + boundary + "\r\n"
     "Content-Disposition: form-data; name=\"house_id\"\r\n\r\n" +
     String(houseId) + "\r\n";
+  String devicePart =
+    "--" + boundary + "\r\n"
+    "Content-Disposition: form-data; name=\"device_id\"\r\n\r\n" +
+    String(deviceId) + "\r\n";
 
   String tail = "--" + boundary + "--\r\n";
-  size_t totalLen = housePart.length() + tail.length();
+  size_t totalLen = housePart.length() + devicePart.length() + tail.length();
 
   for (int i = 0; i < burstFrameCount; i++) {
     if (!burstFrames[i].ok) continue;
@@ -351,6 +355,7 @@ bool uploadBurstFrames(int captured) {
 
   size_t offset = 0;
   appendString(payload, offset, housePart);
+  appendString(payload, offset, devicePart);
 
   for (int i = 0; i < burstFrameCount; i++) {
     if (!burstFrames[i].ok) continue;

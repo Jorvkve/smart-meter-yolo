@@ -82,6 +82,40 @@
 <section class="surface-panel mt-4">
 <div class="panel-header">
 <div>
+<p class="eyebrow">ESP32-CAM</p>
+<h2>สถานะอุปกรณ์</h2>
+</div>
+<div class="device-panel-actions">
+<div id="totalDevices" class="total-pill">-</div>
+<button class="btn btn-sm btn-outline-secondary" type="button" onclick="loadDeviceHeartbeats()">รีเฟรช</button>
+</div>
+</div>
+
+<div class="table-responsive">
+<table class="table align-middle data-table device-table">
+<thead>
+<tr>
+<th>อุปกรณ์</th>
+<th>บ้าน</th>
+<th>สถานะ</th>
+<th>ล่าสุด</th>
+<th>WiFi</th>
+<th>หน่วยความจำ</th>
+<th>ข้อความ</th>
+</tr>
+</thead>
+<tbody id="deviceHeartbeatTable">
+<tr>
+<td colspan="7" class="text-center text-muted py-4">กำลังโหลดสถานะอุปกรณ์...</td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section class="surface-panel mt-4">
+<div class="panel-header">
+<div>
 <p class="eyebrow">ข้อมูลมิเตอร์</p>
 <h2>ตรวจสอบและแก้ไขเลขมิเตอร์</h2>
 </div>

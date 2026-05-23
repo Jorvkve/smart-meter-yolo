@@ -1,7 +1,8 @@
-const API = "http://localhost:3000/api";
+const API = "/api";
 
 let allReadings = [];
 let allHouses = [];
+let deviceHeartbeats = [];
 let editingReadingId = null;
 let currentReadingPage = 1;
 let lastReadingFilterSignature = "";
@@ -11,7 +12,10 @@ const DEFAULT_READING_STATUS = "";
 
 window.addEventListener("load", async () => {
   await loadHouses();
-  await loadMeterReadings();
+  await Promise.all([
+    loadMeterReadings(),
+    loadDeviceHeartbeats(),
+  ]);
 });
 
 function parseDateValue(value) {
@@ -32,6 +36,34 @@ function formatReadingTime(value) {
   const date = parseDateValue(value);
   if (!date || Number.isNaN(date.getTime())) return "-";
   return date.toLocaleString("th-TH");
+}
+
+function formatRelativeAge(seconds) {
+  const totalSeconds = Number(seconds);
+  if (!Number.isFinite(totalSeconds) || totalSeconds < 0) return "-";
+  if (totalSeconds < 60) return `${Math.round(totalSeconds)} วินาทีที่แล้ว`;
+
+  const totalMinutes = Math.round(totalSeconds / 60);
+  if (totalMinutes < 60) return `${totalMinutes.toLocaleString("th-TH")} นาทีที่แล้ว`;
+
+  const totalHours = Math.round(totalMinutes / 60);
+  if (totalHours < 24) return `${totalHours.toLocaleString("th-TH")} ชั่วโมงที่แล้ว`;
+
+  const totalDays = Math.round(totalHours / 24);
+  return `${totalDays.toLocaleString("th-TH")} วันที่แล้ว`;
+}
+
+function formatUptime(value) {
+  const uptimeMs = Number(value);
+  if (!Number.isFinite(uptimeMs) || uptimeMs < 0) return "-";
+
+  const minutes = Math.floor(uptimeMs / 60000);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+
+  if (days > 0) return `${days.toLocaleString("th-TH")} วัน ${hours % 24} ชม.`;
+  if (hours > 0) return `${hours.toLocaleString("th-TH")} ชม. ${minutes % 60} นาที`;
+  return `${minutes.toLocaleString("th-TH")} นาที`;
 }
 
 function formatReadingValue(value) {
@@ -136,6 +168,86 @@ async function loadMeterReadings() {
   populateReadingFilters();
   renderReadings();
   openLinkedReadingEditor();
+}
+
+async function loadDeviceHeartbeats() {
+  const table = document.getElementById("deviceHeartbeatTable");
+  const total = document.getElementById("totalDevices");
+
+  if (!table) return;
+
+  table.innerHTML = `
+    <tr>
+      <td colspan="7" class="text-center text-muted py-4">กำลังโหลดสถานะอุปกรณ์...</td>
+    </tr>
+  `;
+
+  try {
+    const res = await fetch(`${API}/device-ping`);
+    const rows = await res.json();
+
+    if (!res.ok) {
+      throw new Error(rows.error || "Cannot load device heartbeats");
+    }
+
+    deviceHeartbeats = Array.isArray(rows) ? rows : [];
+    if (total) total.innerText = `${deviceHeartbeats.length.toLocaleString("th-TH")} อุปกรณ์`;
+    renderDeviceHeartbeats();
+  } catch (err) {
+    console.error(err);
+    if (total) total.innerText = "-";
+    table.innerHTML = `
+      <tr>
+        <td colspan="7" class="text-center text-muted py-4">โหลดสถานะอุปกรณ์ไม่สำเร็จ</td>
+      </tr>
+    `;
+  }
+}
+
+function renderDeviceHeartbeats() {
+  const table = document.getElementById("deviceHeartbeatTable");
+  if (!table) return;
+
+  if (deviceHeartbeats.length === 0) {
+    table.innerHTML = `
+      <tr>
+        <td colspan="7" class="text-center text-muted py-4">ยังไม่มี heartbeat จาก ESP32-CAM</td>
+      </tr>
+    `;
+    return;
+  }
+
+  table.innerHTML = deviceHeartbeats.map(device => {
+    const online = Number(device.is_online) === 1;
+    const rssi = Number(device.wifi_rssi);
+    const heap = Number(device.free_heap);
+
+    return `
+      <tr>
+        <td>
+          <strong>${escapeHtml(device.device_id)}</strong>
+          <span class="device-subtext">uptime ${formatUptime(device.uptime_ms)}</span>
+        </td>
+        <td>${escapeHtml(device.house_name || (device.house_id ? `บ้าน ${device.house_id}` : "-"))}</td>
+        <td>${renderDeviceStatusBadge(online)}</td>
+        <td>
+          <strong>${formatRelativeAge(device.seconds_since_seen)}</strong>
+          <span class="device-subtext">${formatReadingTime(device.last_seen)}</span>
+        </td>
+        <td>${Number.isFinite(rssi) ? `${rssi} dBm` : "-"}</td>
+        <td>${Number.isFinite(heap) ? `${heap.toLocaleString("th-TH")} bytes` : "-"}</td>
+        <td>${escapeHtml(device.status_message || "-")}</td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function renderDeviceStatusBadge(online) {
+  const status = online
+    ? { level: "ok", label: "ออนไลน์" }
+    : { level: "danger", label: "ขาดการติดต่อ" };
+
+  return `<span class="reading-status-badge ${status.level}">${status.label}</span>`;
 }
 
 function openLinkedReadingEditor() {
