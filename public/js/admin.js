@@ -1,23 +1,36 @@
-const API = "/api";
+const API = "/api"; // เป็น prefix ของ backend API
 
-let allReadings = [];
-let allHouses = [];
-let deviceHeartbeats = [];
-let editingReadingId = null;
-let currentReadingPage = 1;
-let lastReadingFilterSignature = "";
-const HIGH_USAGE_WARNING = 2000;
+let allReadings = []; // เก็บ readings ทั้งหมด
+let allHouses = []; // เก็บบ้านทั้งหมด
+let deviceHeartbeats = []; // เก็บสถานะ ESP32-CAM
+let editingReadingId = null; // เก็บว่า modal กำลังแก้ reading id ไหน
+let currentReadingPage = 1; // ใช้ pagination ตาราง readings
+let lastReadingFilterSignature = ""; // ใช้ดูว่า filter เปลี่ยนไหม
+const HIGH_USAGE_WARNING = 2000; // ใช้เตือนถ้าเลขมิเตอร์เพิ่มมากผิดปกติ
 const DEFAULT_READING_SORT = "house_time";
 const DEFAULT_READING_STATUS = "";
 
+/*
+==============================
+ตั้งค่าเริ่มต้นของหน้า
+==============================
+*/
+
+// เมื่อหน้าโหลดเสร็จ ให้โหลดบ้านก่อน
+// จากนั้นโหลด readings กับ device heartbeat พร้อมกัน
 window.addEventListener("load", async () => {
   await loadHouses();
-  await Promise.all([
-    loadMeterReadings(),
-    loadDeviceHeartbeats(),
-  ]);
+  await Promise.all([loadMeterReadings(), loadDeviceHeartbeats()]);
 });
 
+/*
+==============================
+ตัวช่วยจัดรูปแบบข้อความ
+==============================
+*/
+
+// แปลงค่าวันเวลาจาก database/string ให้เป็น Date object
+// ได้ Date object ของวันที่ 27/05/2026 เวลา 14:30
 function parseDateValue(value) {
   if (!value) return null;
   if (value instanceof Date) return value;
@@ -31,6 +44,8 @@ function parseDateValue(value) {
   return new Date(text);
 }
 
+// แสดงเวลาที่อ่านมิเตอร์ในรูปแบบวันที่/เวลาไทย
+// ผลลัพธ์ประมาณ: "27/5/2569 14:30:00"
 function formatReadingTime(value) {
   if (!value) return "-";
   const date = parseDateValue(value);
@@ -38,21 +53,25 @@ function formatReadingTime(value) {
   return date.toLocaleString("th-TH");
 }
 
+// แปลงจำนวนวินาทีให้เป็นข้อความว่าเห็นอุปกรณ์ล่าสุดเมื่อไร
 function formatRelativeAge(seconds) {
   const totalSeconds = Number(seconds);
   if (!Number.isFinite(totalSeconds) || totalSeconds < 0) return "-";
   if (totalSeconds < 60) return `${Math.round(totalSeconds)} วินาทีที่แล้ว`;
 
   const totalMinutes = Math.round(totalSeconds / 60);
-  if (totalMinutes < 60) return `${totalMinutes.toLocaleString("th-TH")} นาทีที่แล้ว`;
+  if (totalMinutes < 60)
+    return `${totalMinutes.toLocaleString("th-TH")} นาทีที่แล้ว`;
 
   const totalHours = Math.round(totalMinutes / 60);
-  if (totalHours < 24) return `${totalHours.toLocaleString("th-TH")} ชั่วโมงที่แล้ว`;
+  if (totalHours < 24)
+    return `${totalHours.toLocaleString("th-TH")} ชั่วโมงที่แล้ว`;
 
   const totalDays = Math.round(totalHours / 24);
   return `${totalDays.toLocaleString("th-TH")} วันที่แล้ว`;
 }
 
+// แปลง uptime ของ ESP32-CAM จากมิลลิวินาทีเป็นวัน/ชั่วโมง/นาที
 function formatUptime(value) {
   const uptimeMs = Number(value);
   if (!Number.isFinite(uptimeMs) || uptimeMs < 0) return "-";
@@ -62,14 +81,19 @@ function formatUptime(value) {
   const days = Math.floor(hours / 24);
 
   if (days > 0) return `${days.toLocaleString("th-TH")} วัน ${hours % 24} ชม.`;
-  if (hours > 0) return `${hours.toLocaleString("th-TH")} ชม. ${minutes % 60} นาที`;
+  if (hours > 0)
+    return `${hours.toLocaleString("th-TH")} ชม. ${minutes % 60} นาที`;
   return `${minutes.toLocaleString("th-TH")} นาที`;
 }
 
+// แปลงเลขมิเตอร์ให้อ่านง่าย
 function formatReadingValue(value) {
-  return Number(value || 0).toLocaleString("th-TH", { maximumFractionDigits: 2 });
+  return Number(value || 0).toLocaleString("th-TH", {
+    maximumFractionDigits: 2,
+  });
 }
 
+// ป้องกันข้อความจาก database/user ถูกตีความเป็น HTML
 function escapeHtml(value) {
   return String(value ?? "")
     .replaceAll("&", "&amp;")
@@ -79,13 +103,20 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
+/*
+==============================
+จัดการข้อมูลบ้าน
+==============================
+*/
+
 async function loadHouses() {
-  const res = await fetch(`${API}/houses`);
+  // โหลดข้อมูลบ้านและแสดงเป็นการ์ดในหน้า admin
+  const res = await fetch(`${API}/houses`); // เรียก GET /api/houses
   const houses = await res.json();
-  allHouses = houses;
+  allHouses = houses; // เก็บบ้านทั้งหมดไว้ใน allHouses
   const container = document.getElementById("houseList");
   const total = document.getElementById("totalHouses");
-  const template = document.getElementById("houseTemplate");
+  const template = document.getElementById("houseTemplate"); // เอา template จาก HTML มา clone ทำการ์ดบ้าน
 
   if (!container || !template) return;
 
@@ -93,47 +124,60 @@ async function loadHouses() {
 
   container.innerHTML = "";
 
-  houses.forEach(house => {
-    const clone = template.content.cloneNode(true);
+  // วนบ้านทุกหลัง
+  houses.forEach((house) => {
+    const clone = template.content.cloneNode(true); // clone template ใหม่สำหรับบ้านแต่ละหลัง
     const toggleBtn = clone.querySelector(".deleteBtn");
 
+    // ใส่ชื่อบ้าน เจ้าของ ที่อยู่ เบอร์โทร ลงในการ์ด
     clone.querySelector(".house-name").innerText = house.house_name;
-    clone.querySelector(".owner").innerText = `เจ้าของ: ${house.owner_name || "-"}`;
-    clone.querySelector(".address").innerText = `ที่อยู่: ${house.address || "-"}`;
+    clone.querySelector(".owner").innerText =
+      `เจ้าของ: ${house.owner_name || "-"}`;
+    clone.querySelector(".address").innerText =
+      `ที่อยู่: ${house.address || "-"}`;
     clone.querySelector(".phone").innerText = `โทร: ${house.phone || "-"}`;
 
-    clone.querySelector(".editBtn").onclick = () => editHouse(
-      house.id,
-      house.house_name,
-      house.owner_name,
-      house.address,
-      house.phone
-    );
+    // ผูกปุ่มแก้ไขบ้าน
+    clone.querySelector(".editBtn").onclick = () =>
+      editHouse(
+        house.id,
+        house.house_name,
+        house.owner_name,
+        house.address,
+        house.phone,
+      );
 
+    // ถ้าบ้าน active ปุ่มจะเป็น “ปิดใช้งาน”
     if (house.is_active == 1) {
       toggleBtn.innerText = "ปิดใช้งาน";
       toggleBtn.className = "btn btn-danger btn-sm deleteBtn";
+      // ถ้าบ้าน inactive ปุ่มจะเป็น “เปิดใช้งาน”
     } else {
       toggleBtn.innerText = "เปิดใช้งาน";
       toggleBtn.className = "btn btn-success btn-sm deleteBtn";
     }
 
+    // เรียก PUT /api/houses/toggle/:id
     toggleBtn.onclick = () => toggleHouse(house.id);
     container.appendChild(clone);
   });
 }
 
+// สลับสถานะ is_active แทนการลบบ้านออกจากฐานข้อมูล
 async function toggleHouse(id) {
   if (!confirm("ต้องการเปลี่ยนสถานะบ้านนี้หรือไม่?")) return;
 
+  // เรียก PUT /api/houses/toggle/:id
   await fetch(`${API}/houses/toggle/${id}`, {
-    method: "PUT"
+    method: "PUT",
   });
 
-  loadHouses();
+  loadHouses(); // แล้วโหลดบ้านใหม่เพื่ออัปเดต UI
 }
 
+// เพิ่มบ้านใหม่ เพื่อให้บ้านนั้นเริ่มรับข้อมูลอ่านมิเตอร์ได้
 async function addHouse() {
+  // อ่านค่าจาก input, บังคับให้กรอกชื่อบ้าน
   const house_name = document.getElementById("house_name").value.trim();
   const owner_name = document.getElementById("owner_name").value.trim();
   const address = document.getElementById("address").value.trim();
@@ -141,28 +185,37 @@ async function addHouse() {
 
   if (!house_name) return alert("กรุณากรอกชื่อบ้าน");
 
+  // เรียก POST /api/houses เพื่อเพิ่มบ้านใหม่
   await fetch(`${API}/houses`, {
     method: "POST",
     headers: {
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
     },
     body: JSON.stringify({
       house_name,
       owner_name,
       address,
-      phone
-    })
+      phone,
+    }),
   });
 
+  // ล้างฟอร์ม
   document.getElementById("house_name").value = "";
   document.getElementById("owner_name").value = "";
   document.getElementById("address").value = "";
   document.getElementById("phone").value = "";
 
-  loadHouses();
+  loadHouses(); // โหลดรายการบ้านใหม่
 }
 
+/*
+==============================
+จัดการข้อมูลอ่านมิเตอร์
+==============================
+*/
+
 async function loadMeterReadings() {
+  // โหลด readings ทั้งหมดเพื่อใช้ตรวจสอบ กรอง แก้ไข หรือลบ
   const res = await fetch(`${API}/readings`);
   allReadings = await res.json();
   populateReadingFilters();
@@ -170,6 +223,7 @@ async function loadMeterReadings() {
   openLinkedReadingEditor();
 }
 
+// โหลดสถานะ heartbeat ล่าสุดจาก ESP32-CAM มาแสดงในตาราง admin
 async function loadDeviceHeartbeats() {
   const table = document.getElementById("deviceHeartbeatTable");
   const total = document.getElementById("totalDevices");
@@ -183,16 +237,17 @@ async function loadDeviceHeartbeats() {
   `;
 
   try {
-    const res = await fetch(`${API}/device-ping`);
+    const res = await fetch(`${API}/device-ping`); // เรียก GET /api/device-ping
     const rows = await res.json();
 
     if (!res.ok) {
       throw new Error(rows.error || "Cannot load device heartbeats");
     }
 
-    deviceHeartbeats = Array.isArray(rows) ? rows : [];
-    if (total) total.innerText = `${deviceHeartbeats.length.toLocaleString("th-TH")} อุปกรณ์`;
-    renderDeviceHeartbeats();
+    deviceHeartbeats = Array.isArray(rows) ? rows : []; // เก็บข้อมูล heartbeat
+    if (total)
+      total.innerText = `${deviceHeartbeats.length.toLocaleString("th-TH")} อุปกรณ์`;
+    renderDeviceHeartbeats(); // render ตารางสถานะ device
   } catch (err) {
     console.error(err);
     if (total) total.innerText = "-";
@@ -204,6 +259,7 @@ async function loadDeviceHeartbeats() {
   }
 }
 
+// แสดงตารางสถานะ ESP32-CAM ว่ายัง online อยู่หรือไม่
 function renderDeviceHeartbeats() {
   const table = document.getElementById("deviceHeartbeatTable");
   if (!table) return;
@@ -217,31 +273,34 @@ function renderDeviceHeartbeats() {
     return;
   }
 
-  table.innerHTML = deviceHeartbeats.map(device => {
-    const online = Number(device.is_online) === 1;
-    const rssi = Number(device.wifi_rssi);
-    const heap = Number(device.free_heap);
+  table.innerHTML = deviceHeartbeats
+    .map((device) => {
+      const online = Number(device.is_online) === 1; // เช็คสถานะ online/offline จาก backend
+      const rssi = Number(device.wifi_rssi); // ค่า Wi-Fi signal จาก ESP32-CAM
+      const heap = Number(device.free_heap); // หน่วยความจำว่างของ ESP32-CAM
 
-    return `
+      return `
       <tr>
         <td>
-          <strong>${escapeHtml(device.device_id)}</strong>
-          <span class="device-subtext">uptime ${formatUptime(device.uptime_ms)}</span>
+          <strong>${escapeHtml(device.device_id)}</strong> <!-- แสดงรหัสอุปกรณ์ -->
+          <span class="device-subtext">uptime ${formatUptime(device.uptime_ms)}</span> <!-- เวลาที่อุปกรณ์เปิดทำงาน -->
         </td>
-        <td>${escapeHtml(device.house_name || (device.house_id ? `บ้าน ${device.house_id}` : "-"))}</td>
-        <td>${renderDeviceStatusBadge(online)}</td>
+        <td>${escapeHtml(device.house_name || (device.house_id ? `บ้าน ${device.house_id}` : "-"))}</td> <!-- ชื่อบ้านหรือรหัสบ้าน -->
+        <td>${renderDeviceStatusBadge(online)}</td> <!-- badge แสดง Online/Offline -->
         <td>
-          <strong>${formatRelativeAge(device.seconds_since_seen)}</strong>
-          <span class="device-subtext">${formatReadingTime(device.last_seen)}</span>
+          <strong>${formatRelativeAge(device.seconds_since_seen)}</strong> <!-- เห็นอุปกรณ์ล่าสุดเมื่อไร -->
+          <span class="device-subtext">${formatReadingTime(device.last_seen)}</span> <!-- เวลา heartbeat ล่าสุด -->
         </td>
-        <td>${Number.isFinite(rssi) ? `${rssi} dBm` : "-"}</td>
-        <td>${Number.isFinite(heap) ? `${heap.toLocaleString("th-TH")} bytes` : "-"}</td>
-        <td>${escapeHtml(device.status_message || "-")}</td>
+        <td>${Number.isFinite(rssi) ? `${rssi} dBm` : "-"}</td> <!-- ค่า Wi-Fi RSSI -->
+        <td>${Number.isFinite(heap) ? `${heap.toLocaleString("th-TH")} bytes` : "-"}</td> <!-- RAM ว่าง -->
+        <td>${escapeHtml(device.status_message || "-")}</td> <!-- ข้อความสถานะจากอุปกรณ์ -->
       </tr>
     `;
-  }).join("");
+    })
+    .join("");
 }
 
+// สร้าง badge online/offline ของอุปกรณ์
 function renderDeviceStatusBadge(online) {
   const status = online
     ? { level: "ok", label: "ออนไลน์" }
@@ -250,56 +309,82 @@ function renderDeviceStatusBadge(online) {
   return `<span class="reading-status-badge ${status.level}">${status.label}</span>`;
 }
 
+// หน้า daily สามารถส่ง ?reading_id=... มาเพื่อเปิด modal แก้เลขได้ทันที
 function openLinkedReadingEditor() {
-  const params = new URLSearchParams(window.location.search);
-  const readingId = Number(params.get("reading_id"));
+  const params = new URLSearchParams(window.location.search); // อ่าน query string จาก URL เช่น:
+  const readingId = Number(params.get("reading_id")); // เอา reading_id มาเป็นตัวเลข
 
-  if (!Number.isInteger(readingId) || readingId <= 0) return;
-  if (!allReadings.some(item => Number(item.id) === readingId)) return;
+  if (!Number.isInteger(readingId) || readingId <= 0) return; // ถ้า reading_id ไม่ถูกต้อง ให้หยุดทำงาน
+  if (!allReadings.some((item) => Number(item.id) === readingId)) return; // ถ้าไม่พบ reading_id ในข้อมูล readings ให้หยุดทำงาน
 
-  openReadingEditor(readingId);
+  openReadingEditor(readingId); // // ถ้าพบ ให้เปิด modal แก้ reading ทันที
 }
 
+// สร้าง dropdown ตัวกรองใหม่จากข้อมูลบ้านและ readings ที่โหลดมาแล้ว
 function populateReadingFilters() {
   const houseSelect = document.getElementById("filterHouse");
   const monthSelect = document.getElementById("filterMonth");
 
   if (houseSelect) {
     const currentHouse = houseSelect.value;
-    const houses = allHouses
-      .filter(house => house.is_active == 1)
-      .sort((a, b) => Number(a.id) - Number(b.id));
+    const houses = allHouses // สร้าง dropdown filter บ้านจากบ้าน active
+      .filter((house) => house.is_active == 1)
+      .sort((a, b) => Number(a.id) - Number(b.id)); // เรียงตาม id
 
     houseSelect.innerHTML = `<option value="">ทุกบ้าน</option>`;
-    houses.forEach(house => {
-      houseSelect.add(new Option(house.house_name || `บ้าน ${house.id}`, house.id));
+    houses.forEach((house) => {
+      houseSelect.add(
+        new Option(house.house_name || `บ้าน ${house.id}`, house.id),
+      );
     });
-    houseSelect.value = [...houseSelect.options].some(option => option.value === currentHouse) ? currentHouse : "";
+    houseSelect.value = [...houseSelect.options].some(
+      (option) => option.value === currentHouse,
+    )
+      ? currentHouse
+      : "";
   }
 
   if (monthSelect) {
-    const currentMonth = monthSelect.value;
-    const months = [...new Set(allReadings.map(reading => getMonthKey(reading.reading_time)).filter(Boolean))]
-      .sort();
+    const currentMonth = monthSelect.value; // เก็บเดือนที่ผู้ใช้เลือกอยู่ตอนนี้
+    const months = [
+      // สร้างรายการเดือนทั้งหมดจากข้อมูล readings
+      ...new Set( // ใช้ Set เพื่อตัดเดือนที่ซ้ำกันออก
+        allReadings
+          .map((reading) => getMonthKey(reading.reading_time)) // แปลงเวลาอ่านมิเตอร์ให้เป็น key ของเดือน เช่น 2026-05
+          .filter(Boolean),
+      ),
+    ].sort(); // เรียงเดือนจากเก่าไปใหม่
 
     monthSelect.innerHTML = `<option value="">ทุกเดือน</option>`;
-    months.forEach(month => {
+    months.forEach((month) => {
       monthSelect.add(new Option(formatMonthLabel(month), month));
     });
-    monthSelect.value = [...monthSelect.options].some(option => option.value === currentMonth) ? currentMonth : "";
+    monthSelect.value = [...monthSelect.options].some(
+      (option) => option.value === currentMonth,
+    )
+      ? currentMonth
+      : "";
   }
 }
 
+// ใช้ตัวกรอง การเรียงลำดับ และ pagination แล้วแสดงตาราง readings
 function renderReadings() {
   const table = document.getElementById("readingTable");
-  const keyword = document.getElementById("searchHouse")?.value.toLowerCase() || "";
-  const filterHouse = document.getElementById("filterHouse")?.value || "";
-  const filterMonth = document.getElementById("filterMonth")?.value || "";
-  const filterDate = document.getElementById("filterDate")?.value || "";
-  const filterStatusElement = document.getElementById("filterStatus");
-  const filterStatus = filterStatusElement ? filterStatusElement.value : DEFAULT_READING_STATUS;
-  const sort = document.getElementById("sortType")?.value || DEFAULT_READING_SORT;
-  const pageSize = Number(document.getElementById("readingPageSize")?.value || 25);
+  const keyword =
+    document.getElementById("searchHouse")?.value.toLowerCase() || ""; // คำค้นหาชื่อบ้าน
+  const filterHouse = document.getElementById("filterHouse")?.value || ""; // ตัวกรองบ้าน
+  const filterMonth = document.getElementById("filterMonth")?.value || ""; // ตัวกรองเดือน
+  const filterDate = document.getElementById("filterDate")?.value || ""; // ตัวกรองวันที่
+  const filterStatusElement = document.getElementById("filterStatus"); // element ตัวกรองสถานะ
+  const filterStatus = filterStatusElement
+    ? filterStatusElement.value // ใช้สถานะที่ผู้ใช้เลือก
+    : DEFAULT_READING_STATUS; // ถ้าไม่มี element ใช้ค่าเริ่มต้น
+  const sort =
+    document.getElementById("sortType")?.value || DEFAULT_READING_SORT; // รูปแบบการเรียงข้อมูล
+  const pageSize = Number(
+    document.getElementById("readingPageSize")?.value || 25, // จำนวนรายการต่อหน้า
+  );
+  // รวมค่าตัวกรองเป็น string เพื่อเปรียบเทียบว่าตัวกรองเปลี่ยนไหม
   const filterSignature = JSON.stringify({
     keyword,
     filterHouse,
@@ -309,21 +394,27 @@ function renderReadings() {
     sort,
     pageSize,
   });
-  const statusMap = buildReadingStatusMap(allReadings);
+  const statusMap = buildReadingStatusMap(allReadings); // สร้าง map ของสถานะ reading แต่ละรายการ, ใช้เทียบกับ previous reading ของบ้านเดียวกัน
 
+  // ถ้าตัวกรองเปลี่ยนจากครั้งก่อน
   if (filterSignature !== lastReadingFilterSignature) {
-    currentReadingPage = 1;
-    lastReadingFilterSignature = filterSignature;
+    currentReadingPage = 1; // กลับไปหน้าแรกของตาราง
+    lastReadingFilterSignature = filterSignature; // บันทึกค่าตัวกรองล่าสุด
   }
 
-  let data = allReadings.filter(r =>
-    String(r.house_name || "").toLowerCase().includes(keyword)
-    && (!filterHouse || String(r.house_id) === filterHouse)
-    && (!filterMonth || getMonthKey(r.reading_time) === filterMonth)
-    && (!filterDate || getDateKey(r.reading_time) === filterDate)
-    && matchesStatusFilter(statusMap.get(Number(r.id)), filterStatus)
+  // กรอง readings ตามทุกเงื่อนไขที่ user เลือก
+  let data = allReadings.filter(
+    (r) =>
+      String(r.house_name || "")
+        .toLowerCase()
+        .includes(keyword) &&
+      (!filterHouse || String(r.house_id) === filterHouse) &&
+      (!filterMonth || getMonthKey(r.reading_time) === filterMonth) &&
+      (!filterDate || getDateKey(r.reading_time) === filterDate) &&
+      matchesStatusFilter(statusMap.get(Number(r.id)), filterStatus),
   );
 
+  // เรียงข้อมูลตามแบบที่เลือก
   switch (sort) {
     case "latest":
       data.sort((a, b) => new Date(b.reading_time) - new Date(a.reading_time));
@@ -332,24 +423,34 @@ function renderReadings() {
       data.sort((a, b) => new Date(a.reading_time) - new Date(b.reading_time));
       break;
     case "house":
-      data.sort((a, b) => String(a.house_name).localeCompare(String(b.house_name)));
+      data.sort((a, b) =>
+        String(a.house_name).localeCompare(String(b.house_name)),
+      );
       break;
     case "house_time":
-      data.sort((a, b) => Number(a.house_id || 0) - Number(b.house_id || 0) || new Date(a.reading_time) - new Date(b.reading_time));
+      data.sort(
+        (a, b) =>
+          Number(a.house_id || 0) - Number(b.house_id || 0) ||
+          new Date(a.reading_time) - new Date(b.reading_time),
+      );
       break;
     case "unit_high":
-      data.sort((a, b) => Number(b.reading_value || 0) - Number(a.reading_value || 0));
+      data.sort(
+        (a, b) => Number(b.reading_value || 0) - Number(a.reading_value || 0),
+      );
       break;
     case "unit_low":
-      data.sort((a, b) => Number(a.reading_value || 0) - Number(b.reading_value || 0));
+      data.sort(
+        (a, b) => Number(a.reading_value || 0) - Number(b.reading_value || 0),
+      );
       break;
   }
 
-  const totalFiltered = data.length;
-  const totalPages = Math.max(1, Math.ceil(totalFiltered / pageSize));
-  currentReadingPage = Math.min(Math.max(currentReadingPage, 1), totalPages);
-  const pageStart = (currentReadingPage - 1) * pageSize;
-  const pageRows = data.slice(pageStart, pageStart + pageSize);
+  const totalFiltered = data.length; // จำนวนข้อมูลทั้งหมดหลังกรองแล้ว
+  const totalPages = Math.max(1, Math.ceil(totalFiltered / pageSize)); // คำนวณจำนวนหน้าทั้งหมด อย่างน้อยต้องมี 1 หน้า
+  currentReadingPage = Math.min(Math.max(currentReadingPage, 1), totalPages); // บังคับเลขหน้าให้อยู่ระหว่าง 1 ถึงหน้าสุดท้าย
+  const pageStart = (currentReadingPage - 1) * pageSize; // หาตำแหน่งเริ่มต้นของข้อมูลในหน้าปัจจุบัน
+  const pageRows = data.slice(pageStart, pageStart + pageSize); // ตัดข้อมูลเฉพาะแถวที่ต้องแสดงในหน้านี้
 
   table.innerHTML = "";
 
@@ -375,8 +476,11 @@ function renderReadings() {
     return;
   }
 
-  pageRows.forEach(reading => {
-    const status = statusMap.get(Number(reading.id)) || getReadingStatus(reading, null);
+  // render แถวในตาราง
+  // แสดงบ้าน เลขมิเตอร์ เวลา status รูป และปุ่มตรวจ/แก้เลข/ลบ
+  pageRows.forEach((reading) => {
+    const status =
+      statusMap.get(Number(reading.id)) || getReadingStatus(reading, null);
     table.innerHTML += `
       <tr>
         <td>${escapeHtml(reading.house_name)}</td>
@@ -409,11 +513,17 @@ function renderReadings() {
     `;
   });
 
-  updateReadingResultCount(totalFiltered, pageStart + 1, pageStart + pageRows.length);
+  updateReadingResultCount(
+    totalFiltered,
+    pageStart + 1,
+    pageStart + pageRows.length,
+  );
   renderReadingPagination(totalFiltered, totalPages, pageSize);
 }
 
+// เทียบ reading แต่ละรายการกับ reading ก่อนหน้าของบ้านเดียวกัน
 function buildReadingStatusMap(readings) {
+  // จัด readings เป็นกลุ่มตามบ้าน
   const grouped = readings.reduce((groups, reading) => {
     const key = String(reading.house_id);
     if (!groups[key]) groups[key] = [];
@@ -423,46 +533,70 @@ function buildReadingStatusMap(readings) {
 
   const statusMap = new Map();
 
-  Object.values(grouped).forEach(group => {
+  Object.values(grouped).forEach((group) => {
     group
-      .sort((a, b) => new Date(a.reading_time) - new Date(b.reading_time) || Number(a.id) - Number(b.id))
+      .sort(
+        (
+          a,
+          b, // // เรียง reading ตามเวลาอ่านมิเตอร์
+        ) =>
+          new Date(a.reading_time) - new Date(b.reading_time) ||
+          Number(a.id) - Number(b.id),
+      )
       .forEach((reading, index, list) => {
-        statusMap.set(Number(reading.id), getReadingStatus(reading, list[index - 1]));
+        statusMap.set(
+          Number(reading.id), // เก็บสถานะลง Map โดย key คือ reading id
+          getReadingStatus(reading, list[index - 1]), // เทียบ reading ปัจจุบันกับ reading ก่อนหน้า
+        );
       });
   });
 
   return statusMap;
 }
 
+// ตั้งสถานะเตือนเมื่อเลขว่าง เลขลดลง เลขกระโดดสูง หรือไม่มีรูปประกอบ
 function getReadingStatus(reading, previous) {
-  if (!reading?.reading_value) return { level: "empty", key: "empty", label: "ยังไม่มีข้อมูล" };
+  // ถ้าไม่มีเลข reading ให้สถานะ empty
+  if (!reading?.reading_value)
+    return { level: "empty", key: "empty", label: "ยังไม่มีข้อมูล" }; // ถ้าไม่มี metadata เลย แสดงข้อความว่าง
 
   const currentValue = Number(reading.reading_value);
   const previousValue = previous ? Number(previous.reading_value) : null;
 
+  // ถ้าเลขลดลงจากครั้งก่อน ให้ danger
   if (Number.isFinite(previousValue) && currentValue < previousValue) {
     return { level: "danger", key: "danger", label: "เลขลดลง" };
   }
 
-  if (Number.isFinite(previousValue) && currentValue - previousValue > HIGH_USAGE_WARNING) {
+  // ถ้าเพิ่มเกิน 2000 kWh ให้ warning
+  if (
+    Number.isFinite(previousValue) &&
+    currentValue - previousValue > HIGH_USAGE_WARNING
+  ) {
     return { level: "warn", key: "high_usage", label: "เพิ่มสูง" };
   }
 
-  if (!reading.image_filename) return { level: "warn", key: "missing_image", label: "ไม่มีรูป" };
+  // ถ้าไม่มีรูป ให้ warning
+  if (!reading.image_filename)
+    return { level: "warn", key: "missing_image", label: "ไม่มีรูป" };
 
+  // ไม่เข้าเงื่อนไขไหน ถือว่าปกติ
   return { level: "ok", key: "ok", label: "ปกติ" };
 }
 
+// สร้าง badge สถานะคุณภาพ reading เช่น ปกติ เลขลดลง หรือไม่มีรูป
 function renderStatusBadge(status) {
   return `<span class="reading-status-badge ${escapeHtml(status.level)}">${escapeHtml(status.label)}</span>`;
 }
 
+// แปลงค่า confidence ของโมเดลเป็นเปอร์เซ็นต์
 function formatConfidence(value) {
   const confidence = Number(value);
   if (!Number.isFinite(confidence)) return "-";
   return `${(confidence * 100).toFixed(1)}%`;
 }
 
+// แปลงโหมดการบันทึกภาพให้อ่านง่ายในหน้า admin
 function formatCaptureMode(value) {
   if (value === "burst") return "Burst หลายเฟรม";
   if (value === "manual") return "กรอกเลขเอง";
@@ -470,13 +604,14 @@ function formatCaptureMode(value) {
   return "-";
 }
 
+// แสดงข้อมูลเฟรม burst เพื่อให้ admin เข้าใจว่าระบบเลือกเฟรมนี้เพราะอะไร
 function renderFrameMetadata(reading) {
   const container = document.getElementById("reviewFrameMeta");
   if (!container) return;
 
-  const frames = Array.isArray(reading.frames_summary)
+  const frames = Array.isArray(reading.frames_summary) // อ่านสรุป frame จาก reading
     ? reading.frames_summary
-    : [];
+    : []; // ถ้าไม่ใช่ array ให้ใช้ array ว่าง
 
   if (!reading.capture_mode && frames.length === 0) {
     container.innerHTML = `
@@ -487,6 +622,7 @@ function renderFrameMetadata(reading) {
     return;
   }
 
+  // แปลง selected_frame เป็นตัวเลข, ถ้าใช้ไม่ได้ให้ null
   const selectedFrame = Number.isInteger(Number(reading.selected_frame))
     ? Number(reading.selected_frame)
     : null;
@@ -495,7 +631,7 @@ function renderFrameMetadata(reading) {
     <div class="frame-meta-header">
       <div>
         <span>ข้อมูลการอ่านจากกล้อง</span>
-        <strong>${formatCaptureMode(reading.capture_mode)}</strong>
+        <strong>${formatCaptureMode(reading.capture_mode)}</strong> <!-- capture mode เช่น burst/manual/single, จำนวน frame -->
       </div>
       <span class="frame-meta-badge">${frames.length ? `${frames.length} เฟรม` : "1 ภาพ"}</span>
     </div>
@@ -516,28 +652,34 @@ function renderFrameMetadata(reading) {
     ${
       frames.length
         ? `<div class="frame-summary-list">
-            ${frames.map(frame => `
-              <div class="frame-summary-item ${frame.selected ? "selected" : ""}">
-                <span>เฟรม ${Number(frame.index) + 1}</span>
-                <strong>${frame.reading_value ?? "-"} kWh</strong>
-                <small>${formatConfidence(frame.avg_conf)} · ${frame.boxes ?? "-"} กล่อง</small>
+            ${frames
+              .map(
+                (frame) => ` // วนแสดงผลทุก frame ที่ถ่ายใน burst
+              <div class="frame-summary-item ${frame.selected ? "selected" : ""}"> <!-- ถ้า frame นี้ถูกเลือก ให้เพิ่ม class selected -->
+                <span>เฟรม ${Number(frame.index) + 1}</span> <!-- แสดงลำดับเฟรม โดยบวก 1 เพราะ index เริ่มจาก 0 -->
+                <strong>${frame.reading_value ?? "-"} kWh</strong> <!-- แสดงค่ามิเตอร์ที่อ่านได้ ถ้าไม่มีให้แสดง - -->
+                <small>${formatConfidence(frame.avg_conf)} · ${frame.boxes ?? "-"} กล่อง</small> <!-- แสดง confidence และจำนวนกล่องที่ YOLO ตรวจจับได้ -->
               </div>
-            `).join("")}
+            `,
+              )
+              .join("")}
           </div>`
         : ""
     }
   `;
 }
 
+// แปลงค่าจาก dropdown ให้เป็นเงื่อนไขกรองสถานะ
 function matchesStatusFilter(status, filter) {
   if (!filter) return true;
   if (!status) return false;
-  if (filter === "needs_review") return status.level !== "ok";
-  if (filter === "warn") return status.level === "warn";
-  if (filter === "missing_image") return status.key === "missing_image";
+  if (filter === "needs_review") return status.level !== "ok"; // ทุก reading ที่สถานะไม่ใช่ปกติ
+  if (filter === "warn") return status.level === "warn"; // warning ทุกแบบ
+  if (filter === "missing_image") return status.key === "missing_image"; // เฉพาะไม่มีรูป
   return status.level === filter || status.key === filter;
 }
 
+// แปลงวันที่เป็น key รูปแบบ YYYY-MM-DD สำหรับตัวกรองวันที่
 function getDateKey(value) {
   if (!value) return "";
   const date = parseDateValue(value);
@@ -545,6 +687,7 @@ function getDateKey(value) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
+// แปลงวันที่เป็น key รูปแบบ YYYY-MM สำหรับตัวกรองเดือน
 function getMonthKey(value) {
   if (!value) return "";
   const date = parseDateValue(value);
@@ -552,23 +695,28 @@ function getMonthKey(value) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
 
+// แสดง month key ให้เป็นรูปแบบ MM/YYYY
 function formatMonthLabel(monthKey) {
   const [year, month] = monthKey.split("-");
   return `${month}/${year}`;
 }
 
+// อัปเดตข้อความจำนวนผลลัพธ์หลังกรอง readings
 function updateReadingResultCount(count, start = 0, end = 0) {
   const result = document.getElementById("readingResultCount");
   if (!result) return;
 
+  // ถ้า filter แล้วไม่เจอ บอกว่าไม่พบ
   if (count === 0) {
     result.innerText = `ไม่พบรายการที่ตรงกับตัวกรอง จากทั้งหมด ${allReadings.length.toLocaleString("th-TH")} รายการ`;
     return;
   }
 
+  // แสดงจำนวนรายการในหน้าปัจจุบัน เช่น 1-25 จาก 80
   result.innerText = `แสดง ${start.toLocaleString("th-TH")}-${end.toLocaleString("th-TH")} จาก ${count.toLocaleString("th-TH")} รายการที่ตรงกับตัวกรอง / ทั้งหมด ${allReadings.length.toLocaleString("th-TH")} รายการ`;
 }
 
+// แสดงปุ่ม pagination ถ้าจำนวนรายการมากกว่า page size
 function renderReadingPagination(totalFiltered, totalPages, pageSize) {
   const container = document.getElementById("readingPagination");
   if (!container) return;
@@ -578,6 +726,7 @@ function renderReadingPagination(totalFiltered, totalPages, pageSize) {
     return;
   }
 
+  // ปุ่มก่อนหน้า/ถัดไป
   container.innerHTML = `
     <button
       class="chart-nav-btn"
@@ -597,11 +746,13 @@ function renderReadingPagination(totalFiltered, totalPages, pageSize) {
   `;
 }
 
+// เปลี่ยนหน้ารายการ readings ไปก่อนหน้าหรือถัดไป
 function changeReadingPage(direction) {
   currentReadingPage += direction;
-  renderReadings();
+  renderReadings(); // render ตารางใหม่
 }
 
+// ล้างเฉพาะตัวกรองสถานะ เพื่อกลับไปดู readings ทั้งหมด
 function showAllMeterReadings() {
   const filterStatus = document.getElementById("filterStatus");
   if (filterStatus) filterStatus.value = "";
@@ -611,9 +762,10 @@ function showAllMeterReadings() {
   renderReadings();
 }
 
+// ล้างตัวกรอง readings ทั้งหมดกลับค่าเริ่มต้น
 function resetReadingFilters() {
   const ids = ["searchHouse", "filterHouse", "filterMonth", "filterDate"];
-  ids.forEach(id => {
+  ids.forEach((id) => {
     const el = document.getElementById(id);
     if (el) el.value = "";
   });
@@ -632,19 +784,27 @@ function resetReadingFilters() {
   renderReadings();
 }
 
+// เปิด modal ให้ admin เทียบรูปจริงกับเลข YOLO แล้วแก้ค่า reading ได้
 function openReadingEditor(id) {
-  const reading = allReadings.find(item => Number(item.id) === Number(id));
-  if (!reading) return alert("ไม่พบรายการมิเตอร์นี้");
+  const reading = allReadings.find((item) => Number(item.id) === Number(id)); // หา reading ที่ต้องการแก้
+  if (!reading) return alert("ไม่พบรายการมิเตอร์นี้"); //  ถ้าไม่เจอ แจ้งเตือน
 
-  editingReadingId = id;
+  editingReadingId = id; // จำว่า modal นี้กำลังแก้ reading id ไหน
 
-  document.getElementById("reviewHouseName").innerText = reading.house_name || "-";
-  document.getElementById("reviewReadingTime").innerText = `เวลาอ่านค่า: ${formatReadingTime(reading.reading_time)}`;
-  document.getElementById("reviewReadingValue").value = Number(reading.reading_value || 0);
+  // ใส่ชื่อบ้าน เวลา และค่า reading ลง modal
+  document.getElementById("reviewHouseName").innerText =
+    reading.house_name || "-";
+  document.getElementById("reviewReadingTime").innerText =
+    `เวลาอ่านค่า: ${formatReadingTime(reading.reading_time)}`;
+  document.getElementById("reviewReadingValue").value = Number(
+    reading.reading_value || 0,
+  );
 
   const image = document.getElementById("reviewReadingImage");
   const empty = document.getElementById("reviewImageEmpty");
 
+  // ถ้ามีรูป แสดงรูป
+  // ถ้าไม่มีรูป แสดงข้อความว่าไม่มีรูป
   if (reading.image_filename) {
     image.src = `/uploads/${reading.image_filename}`;
     image.classList.remove("d-none");
@@ -655,31 +815,38 @@ function openReadingEditor(id) {
     empty.classList.remove("d-none");
   }
 
+  // แสดง metadata burst/manual/single
+  // เปิด modal
   renderFrameMetadata(reading);
   document.getElementById("readingEditModal").classList.remove("d-none");
 }
 
+// ปิด modal แก้เลขมิเตอร์
 function closeReadingEditor() {
   editingReadingId = null;
   document.getElementById("readingEditModal").classList.add("d-none");
 }
 
+// บันทึกเลขมิเตอร์ที่แก้แล้วกลับลง meter_readings
 async function saveReadingValue() {
-  const value = Number(document.getElementById("reviewReadingValue").value);
+  const value = Number(document.getElementById("reviewReadingValue").value); // อ่านค่าใหม่จาก input
 
-  if (!editingReadingId) return;
+  if (!editingReadingId) return; // ถ้ายังไม่ได้เลือก reading หรือค่าไม่ถูกต้อง ให้หยุด
+  // ตรวจว่าเป็นตัวเลขจริง และห้ามเป็นค่าติดลบ
   if (!Number.isFinite(value) || value < 0) {
     return alert("กรุณากรอกเลขมิเตอร์ให้ถูกต้อง");
   }
 
+  // เรียก PUT /api/readings/:id
+  // ส่งค่า reading ใหม่ไป backend
   const res = await fetch(`${API}/readings/${editingReadingId}`, {
     method: "PUT",
     headers: {
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      reading_value: value
-    })
+      reading_value: value,
+    }),
   });
 
   const payload = await res.json();
@@ -688,45 +855,49 @@ async function saveReadingValue() {
     return alert(payload.error || "แก้ไขเลขมิเตอร์ไม่สำเร็จ");
   }
 
-  closeReadingEditor();
-  await loadMeterReadings();
+  closeReadingEditor(); // ปิด modal
+  await loadMeterReadings(); // โหลด readings ใหม่เพื่อให้ตารางอัปเดต
 }
 
+// ลบแถว reading ที่ admin เห็นว่าไม่ควรอยู่ในประวัติ
 async function deleteReading(id) {
-  const reading = allReadings.find(item => Number(item.id) === Number(id));
+  const reading = allReadings.find((item) => Number(item.id) === Number(id)); // หา reading เพื่อแสดงรายละเอียดก่อนลบ
   const detail = reading
     ? `${reading.house_name || "-"} วันที่ ${formatReadingTime(reading.reading_time)} ค่า ${formatReadingValue(reading.reading_value)} kWh`
     : `รายการ id ${id}`;
 
-  if (!confirm(`ต้องการลบข้อมูลมิเตอร์นี้หรือไม่?\n\n${detail}`)) return;
+  if (!confirm(`ต้องการลบข้อมูลมิเตอร์นี้หรือไม่?\n\n${detail}`)) return; //
 
+  // เรียก DELETE /api/readings/:id
   await fetch(`${API}/readings/${id}`, {
-    method: "DELETE"
+    method: "DELETE",
   });
 
-  loadMeterReadings();
+  loadMeterReadings(); // โหลด readings ใหม่
 }
 
+// ฟอร์มแก้ข้อมูลบ้านแบบง่ายผ่าน prompt
 async function editHouse(id, name, owner, address, phone) {
-  const house_name = prompt("ชื่อบ้าน", name);
-  if (!house_name) return;
+  const house_name = prompt("ชื่อบ้าน", name); // แก้ข้อมูลบ้านผ่าน prompt
+  if (!house_name) return; // ถ้าไม่กรอกชื่อบ้าน ให้หยุด
 
   const owner_name = prompt("ชื่อเจ้าของ", owner || "");
   const addr = prompt("ที่อยู่", address || "");
   const phone_no = prompt("เบอร์โทร", phone || "");
 
+  // เรียก PUT /api/houses/:id
   await fetch(`${API}/houses/${id}`, {
     method: "PUT",
     headers: {
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
     },
     body: JSON.stringify({
       house_name,
       owner_name,
       address: addr,
-      phone: phone_no
-    })
+      phone: phone_no,
+    }),
   });
 
-  loadHouses();
+  loadHouses(); // โหลดบ้านใหม่
 }

@@ -597,7 +597,7 @@ h3 {
 
 .bill-history-filter-grid {
   display: grid;
-  grid-template-columns: minmax(220px, 1.4fr) minmax(180px, 0.9fr) minmax(170px, 0.8fr) auto;
+  grid-template-columns: minmax(220px, 1.4fr) minmax(170px, 0.85fr) minmax(160px, 0.75fr) minmax(140px, 0.7fr) auto;
   gap: 14px;
   align-items: end;
   margin-bottom: 18px;
@@ -621,6 +621,36 @@ h3 {
   color: var(--muted);
   font-size: 0.78rem;
   font-weight: 700;
+}
+
+.bill-status-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 900;
+}
+
+.bill-status-badge.active {
+  color: #0f5132;
+  background: rgba(25, 135, 84, 0.14);
+}
+
+.bill-status-badge.cancelled {
+  color: #842029;
+  background: rgba(220, 53, 69, 0.14);
+}
+
+.bill-cancelled-banner {
+  margin: 28px 28px 0;
+  padding: 12px 14px;
+  border: 1px solid rgba(220, 53, 69, 0.25);
+  border-radius: 8px;
+  color: #842029;
+  background: rgba(220, 53, 69, 0.1);
+  font-weight: 900;
 }
 
 .bill-history-detail-panel {

@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: May 24, 2026 at 12:51 AM
+-- Generation Time: May 27, 2026 at 07:50 AM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -63,12 +63,15 @@ CREATE TABLE `electric_bills` (
   `start_reading` float NOT NULL,
   `end_reading` float NOT NULL,
   `usage_unit` float NOT NULL,
-  `unit_rate` decimal(10,2) NOT NULL,
+  `unit_rate` decimal(12,4) NOT NULL,
   `total_amount` decimal(12,2) NOT NULL,
   `start_reading_time` datetime DEFAULT NULL,
   `end_reading_time` datetime DEFAULT NULL,
   `issue_date` datetime NOT NULL,
   `due_date` datetime NOT NULL,
+  `status` varchar(20) NOT NULL DEFAULT 'active',
+  `cancelled_at` datetime DEFAULT NULL,
+  `cancel_reason` varchar(255) DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -76,10 +79,9 @@ CREATE TABLE `electric_bills` (
 -- Dumping data for table `electric_bills`
 --
 
-INSERT INTO `electric_bills` (`id`, `bill_no`, `house_id`, `start_month`, `end_month`, `start_reading`, `end_reading`, `usage_unit`, `unit_rate`, `total_amount`, `start_reading_time`, `end_reading_time`, `issue_date`, `due_date`, `created_at`) VALUES
-(4, 'SM-20260518010314-H1-202603-202604', 1, '2026-03', '2026-04', 15664, 15672, 8, 3.25, 25.99, '2026-03-12 10:45:28', '2026-04-12 16:51:52', '2026-05-18 18:03:14', '2026-05-25 18:03:14', '2026-05-18 18:03:14'),
-(5, 'SM-20260518012025-H1-202604-202605', 1, '2026-04', '2026-05', 15672, 15684, 12, 3.25, 38.98, '2026-04-12 16:51:52', '2026-05-14 18:02:05', '2026-05-18 18:20:25', '2026-05-25 18:20:25', '2026-05-18 18:20:25'),
-(7, 'SM-20260520120122-H2-202604-202605', 2, '2026-04', '2026-05', 9126, 9130, 4, 3.25, 12.99, '2026-04-12 23:51:56', '2026-05-15 01:02:56', '2026-05-20 05:01:22', '2026-05-27 05:01:22', '2026-05-20 05:01:22');
+INSERT INTO `electric_bills` (`id`, `bill_no`, `house_id`, `start_month`, `end_month`, `start_reading`, `end_reading`, `usage_unit`, `unit_rate`, `total_amount`, `start_reading_time`, `end_reading_time`, `issue_date`, `due_date`, `status`, `cancelled_at`, `cancel_reason`, `created_at`) VALUES
+(17, 'SM-20260527123505-H1-202603-202604', 1, '2026-03', '2026-04', 15664, 15672, 8, 3.2484, 25.99, '2026-03-15 12:05:00', '2026-04-15 12:10:00', '2026-05-27 05:35:05', '2026-06-03 05:35:05', 'active', NULL, NULL, '2026-05-27 05:35:05'),
+(18, 'SM-20260527123535-H1-202603-202604', 1, '2026-03', '2026-04', 15664, 15672, 8, 3.2484, 25.99, '2026-03-15 12:05:00', '2026-04-15 12:10:00', '2026-05-27 05:35:35', '2026-06-03 05:35:35', 'active', NULL, NULL, '2026-05-27 05:35:35');
 
 -- --------------------------------------------------------
 
@@ -131,17 +133,16 @@ CREATE TABLE `meter_readings` (
 --
 
 INSERT INTO `meter_readings` (`id`, `house_id`, `reading_value`, `image_filename`, `reading_time`, `capture_mode`, `selected_frame`, `selection_reason`, `avg_conf`, `frames_summary`) VALUES
-(1, 1, 15664, 'esp32_house1_20260512_174528.jpg', '2026-03-12 10:45:28', 'single', NULL, NULL, NULL, NULL),
-(2, 2, 9116, 'esp32_house2_20260512_175209.jpg', '2026-03-12 10:52:09', 'single', NULL, NULL, NULL, NULL),
-(3, 3, 14581, 'esp32_house3_20260512_175234.jpg', '2026-03-12 10:52:34', 'single', NULL, NULL, NULL, NULL),
-(5, 1, 15672, 'esp32_house1_20260513_235152.jpg', '2026-04-12 16:51:52', 'single', NULL, NULL, NULL, NULL),
-(6, 2, 9126, 'esp32_house2_20260513_235156.jpg', '2026-04-12 16:51:56', 'single', NULL, NULL, NULL, NULL),
-(7, 3, 14582, 'esp32_house3_20260513_235158.jpg', '2026-04-12 16:51:58', 'single', NULL, NULL, NULL, NULL),
+(1, 1, 15664, 'esp32_house1_20260512_174528.jpg', '2026-03-15 05:05:00', 'single', NULL, NULL, NULL, NULL),
+(2, 2, 9116, 'esp32_house2_20260512_175209.jpg', '2026-03-15 05:06:00', 'single', NULL, NULL, NULL, NULL),
+(3, 3, 14581, 'esp32_house3_20260512_175234.jpg', '2026-03-15 05:07:00', 'single', NULL, NULL, NULL, NULL),
+(5, 1, 15672, 'esp32_house1_20260513_235152.jpg', '2026-04-15 05:10:00', 'single', NULL, NULL, NULL, NULL),
+(6, 2, 9126, 'esp32_house2_20260513_235156.jpg', '2026-04-15 05:11:00', 'single', NULL, NULL, NULL, NULL),
+(7, 3, 14582, 'esp32_house3_20260513_235158.jpg', '2026-04-15 05:13:00', 'single', NULL, NULL, NULL, NULL),
 (26, 1, 15090, 'meter_1778748967952.jpg', '2026-02-12 08:56:15', 'single', NULL, NULL, NULL, NULL),
-(30, 1, 15684, 'meter_1778781718497.jpg', '2026-05-14 18:02:05', 'single', NULL, NULL, NULL, NULL),
-(31, 2, 9130, 'meter_1778781769227.jpg', '2026-05-14 18:02:56', 'single', NULL, NULL, NULL, NULL),
-(32, 3, 14583, 'meter_1778781801726.jpg', '2026-05-14 18:03:28', 'single', NULL, NULL, NULL, NULL),
-(34, 4, 12487, 'meter_1778785457271.jpg', '2026-05-14 19:04:24', 'single', NULL, NULL, NULL, NULL),
+(30, 1, 15684, 'meter_1778781718497.jpg', '2026-05-15 05:12:00', 'single', NULL, NULL, NULL, NULL),
+(31, 2, 9130, 'meter_1778781769227.jpg', '2026-05-15 05:16:00', 'single', NULL, NULL, NULL, NULL),
+(32, 3, 14583, 'meter_1778781801726.jpg', '2026-05-15 05:18:00', 'single', NULL, NULL, NULL, NULL),
 (41, 1, 15703, 'meter_1779453856855_730449249.JPEG', '2026-05-16 13:41:45', 'single', NULL, NULL, NULL, NULL),
 (42, 1, 15708, 'meter_1779453916748_725101428.JPEG', '2026-05-17 17:02:22', 'single', NULL, NULL, NULL, NULL),
 (43, 1, 15709, 'meter_1779453935020_612715080.JPEG', '2026-05-19 16:12:40', 'single', NULL, NULL, NULL, NULL),
@@ -157,12 +158,15 @@ INSERT INTO `meter_readings` (`id`, `house_id`, `reading_value`, `image_filename
 (55, 1, 16000, NULL, '2026-05-22 21:13:42', 'single', NULL, NULL, NULL, NULL),
 (56, 1, 16100, NULL, '2026-05-22 21:13:50', 'single', NULL, NULL, NULL, NULL),
 (57, 1, 16200, NULL, '2026-05-22 21:13:59', 'single', NULL, NULL, NULL, NULL),
-(58, 4, NULL, 'meter_1779539751620_326359688.jpg', '2026-05-23 12:36:20', 'burst', 0, 'no_valid_prediction', NULL, '[{\"index\":0,\"filename\":\"meter_1779539751620_326359688.jpg\",\"reading_value\":null,\"boxes\":0,\"avg_conf\":null,\"selected\":true,\"prediction_error\":null},{\"index\":1,\"filename\":\"meter_1779539751700_418072968.jpg\",\"reading_value\":null,\"boxes\":0,\"avg_conf\":null,\"selected\":false,\"prediction_error\":null},{\"index\":2,\"filename\":\"meter_1779539751773_184287917.jpg\",\"reading_value\":null,\"boxes\":0,\"avg_conf\":null,\"selected\":false,\"prediction_error\":null}]'),
-(59, 4, 17081, 'meter_1779539872778_627185353.jpg', '2026-05-23 12:38:00', 'burst', 1, 'majority_confidence_median', 0.833756, '[{\"index\":0,\"filename\":\"meter_1779539872739_613283497.jpg\",\"reading_value\":1,\"boxes\":1,\"avg_conf\":0.35120517015457153,\"selected\":false,\"prediction_error\":null},{\"index\":1,\"filename\":\"meter_1779539872778_627185353.jpg\",\"reading_value\":17081,\"boxes\":5,\"avg_conf\":0.8337563753128052,\"selected\":true,\"prediction_error\":null},{\"index\":2,\"filename\":\"meter_1779539872850_687342474.jpg\",\"reading_value\":17091,\"boxes\":5,\"avg_conf\":0.8307983994483947,\"selected\":false,\"prediction_error\":null}]'),
-(60, 4, 17881, 'meter_1779540705391_38352488.jpg', '2026-05-23 12:51:52', 'burst', 9, 'close_transition_choose_highest', 0.666661, '[{\"index\":0,\"filename\":\"meter_1779540704688_449434637.jpg\",\"reading_value\":null,\"boxes\":0,\"avg_conf\":null,\"selected\":false,\"prediction_error\":null},{\"index\":1,\"filename\":\"meter_1779540704805_523214437.jpg\",\"reading_value\":null,\"boxes\":0,\"avg_conf\":null,\"selected\":false,\"prediction_error\":null},{\"index\":2,\"filename\":\"meter_1779540704888_201397153.jpg\",\"reading_value\":null,\"boxes\":0,\"avg_conf\":null,\"selected\":false,\"prediction_error\":null},{\"index\":3,\"filename\":\"meter_1779540704987_143632599.jpg\",\"reading_value\":null,\"boxes\":0,\"avg_conf\":null,\"selected\":false,\"prediction_error\":null},{\"index\":4,\"filename\":\"meter_1779540705052_78814389.jpg\",\"reading_value\":14641,\"boxes\":5,\"avg_conf\":0.5679478287696839,\"selected\":false,\"prediction_error\":null},{\"index\":5,\"filename\":\"meter_1779540705110_694915951.jpg\",\"reading_value\":7891,\"boxes\":4,\"avg_conf\":0.5818059146404266,\"selected\":false,\"prediction_error\":null},{\"index\":6,\"filename\":\"meter_1779540705176_480531677.jpg\",\"reading_value\":16081,\"boxes\":5,\"avg_conf\":0.6223803639411927,\"selected\":false,\"prediction_error\":null},{\"index\":7,\"filename\":\"meter_1779540705228_777130133.jpg\",\"reading_value\":761,\"boxes\":3,\"avg_conf\":0.6064786314964294,\"selected\":false,\"prediction_error\":null},{\"index\":8,\"filename\":\"meter_1779540705303_202369875.jpg\",\"reading_value\":14001,\"boxes\":5,\"avg_conf\":0.5649205625057221,\"selected\":false,\"prediction_error\":null},{\"index\":9,\"filename\":\"meter_1779540705391_38352488.jpg\",\"reading_value\":17881,\"boxes\":5,\"avg_conf\":0.6666611433029175,\"selected\":true,\"prediction_error\":null}]'),
-(61, 4, 17081, 'meter_1779540916552_148027371.jpg', '2026-05-23 12:55:24', 'burst', 1, 'majority_confidence_median', 0.858312, '[{\"index\":0,\"filename\":\"meter_1779540916509_730380118.jpg\",\"reading_value\":100,\"boxes\":3,\"avg_conf\":0.6557218233744303,\"selected\":false,\"prediction_error\":null},{\"index\":1,\"filename\":\"meter_1779540916552_148027371.jpg\",\"reading_value\":17081,\"boxes\":5,\"avg_conf\":0.858312439918518,\"selected\":true,\"prediction_error\":null},{\"index\":2,\"filename\":\"meter_1779540916592_659728076.jpg\",\"reading_value\":17081,\"boxes\":5,\"avg_conf\":0.8204265713691712,\"selected\":false,\"prediction_error\":null},{\"index\":3,\"filename\":\"meter_1779540916665_791835580.jpg\",\"reading_value\":17081,\"boxes\":5,\"avg_conf\":0.8212746500968933,\"selected\":false,\"prediction_error\":null},{\"index\":4,\"filename\":\"meter_1779540916730_153094324.jpg\",\"reading_value\":17081,\"boxes\":5,\"avg_conf\":0.8405208110809326,\"selected\":false,\"prediction_error\":null},{\"index\":5,\"filename\":\"meter_1779540916783_292010743.jpg\",\"reading_value\":17081,\"boxes\":5,\"avg_conf\":0.8087257385253906,\"selected\":false,\"prediction_error\":null},{\"index\":6,\"filename\":\"meter_1779540916862_165971551.jpg\",\"reading_value\":17001,\"boxes\":5,\"avg_conf\":0.8348283052444458,\"selected\":false,\"prediction_error\":null},{\"index\":7,\"filename\":\"meter_1779540916926_820670926.jpg\",\"reading_value\":17081,\"boxes\":5,\"avg_conf\":0.8496490359306336,\"selected\":false,\"prediction_error\":null},{\"index\":8,\"filename\":\"meter_1779540916975_46783680.jpg\",\"reading_value\":17081,\"boxes\":5,\"avg_conf\":0.8477347493171692,\"selected\":false,\"prediction_error\":null},{\"index\":9,\"filename\":\"meter_1779540917029_386474100.jpg\",\"reading_value\":null,\"boxes\":0,\"avg_conf\":null,\"selected\":false,\"prediction_error\":null}]'),
 (63, 14, 4608, 'meter_1779564792438_483524466.jpg', '2026-05-23 19:33:25', 'burst', 1, 'close_transition_choose_highest', 0.535231, '[{\"index\":0,\"filename\":\"meter_1779564792362_111035079.jpg\",\"reading_value\":4608,\"boxes\":4,\"avg_conf\":0.519072599709034,\"selected\":false,\"prediction_error\":null},{\"index\":1,\"filename\":\"meter_1779564792438_483524466.jpg\",\"reading_value\":4608,\"boxes\":4,\"avg_conf\":0.535231277346611,\"selected\":true,\"prediction_error\":null},{\"index\":2,\"filename\":\"meter_1779564792508_787004314.jpg\",\"reading_value\":4606,\"boxes\":4,\"avg_conf\":0.5547829419374466,\"selected\":false,\"prediction_error\":null},{\"index\":3,\"filename\":\"meter_1779564792594_520770218.jpg\",\"reading_value\":4606,\"boxes\":4,\"avg_conf\":0.5682410076260567,\"selected\":false,\"prediction_error\":null},{\"index\":4,\"filename\":\"meter_1779564792690_840915514.jpg\",\"reading_value\":4606,\"boxes\":4,\"avg_conf\":0.6202618777751923,\"selected\":false,\"prediction_error\":null}]'),
-(64, 14, 11606, 'meter_1779568683148_317462613.jpg', '2026-05-23 20:38:09', 'burst', 3, 'close_transition_choose_highest', 0.793567, '[{\"index\":0,\"filename\":\"meter_1779568682916_351089006.jpg\",\"reading_value\":11605,\"boxes\":5,\"avg_conf\":0.7987988114356994,\"selected\":false,\"prediction_error\":null},{\"index\":1,\"filename\":\"meter_1779568683000_609946140.jpg\",\"reading_value\":11605,\"boxes\":5,\"avg_conf\":0.7992152094841003,\"selected\":false,\"prediction_error\":null},{\"index\":2,\"filename\":\"meter_1779568683073_655007766.jpg\",\"reading_value\":11606,\"boxes\":5,\"avg_conf\":0.7786164283752441,\"selected\":false,\"prediction_error\":null},{\"index\":3,\"filename\":\"meter_1779568683148_317462613.jpg\",\"reading_value\":11606,\"boxes\":5,\"avg_conf\":0.7935668706893921,\"selected\":true,\"prediction_error\":null},{\"index\":4,\"filename\":\"meter_1779568683227_32094120.jpg\",\"reading_value\":11604,\"boxes\":5,\"avg_conf\":0.7958571910858154,\"selected\":false,\"prediction_error\":null}]');
+(64, 14, 11606, 'meter_1779568683148_317462613.jpg', '2026-05-23 20:38:09', 'burst', 3, 'close_transition_choose_highest', 0.793567, '[{\"index\":0,\"filename\":\"meter_1779568682916_351089006.jpg\",\"reading_value\":11605,\"boxes\":5,\"avg_conf\":0.7987988114356994,\"selected\":false,\"prediction_error\":null},{\"index\":1,\"filename\":\"meter_1779568683000_609946140.jpg\",\"reading_value\":11605,\"boxes\":5,\"avg_conf\":0.7992152094841003,\"selected\":false,\"prediction_error\":null},{\"index\":2,\"filename\":\"meter_1779568683073_655007766.jpg\",\"reading_value\":11606,\"boxes\":5,\"avg_conf\":0.7786164283752441,\"selected\":false,\"prediction_error\":null},{\"index\":3,\"filename\":\"meter_1779568683148_317462613.jpg\",\"reading_value\":11606,\"boxes\":5,\"avg_conf\":0.7935668706893921,\"selected\":true,\"prediction_error\":null},{\"index\":4,\"filename\":\"meter_1779568683227_32094120.jpg\",\"reading_value\":11604,\"boxes\":5,\"avg_conf\":0.7958571910858154,\"selected\":false,\"prediction_error\":null}]'),
+(65, 4, 11709, NULL, '2026-05-25 08:44:00', 'single', NULL, NULL, NULL, NULL),
+(66, 4, 11711, NULL, '2026-05-25 11:00:00', 'single', NULL, NULL, NULL, NULL),
+(67, 4, 11713, NULL, '2026-05-25 14:37:00', 'single', NULL, NULL, NULL, NULL),
+(68, 4, 11713, NULL, '2026-05-25 17:38:00', 'single', NULL, NULL, NULL, NULL),
+(69, 4, 11718, NULL, '2026-05-26 07:50:00', 'single', NULL, NULL, NULL, NULL),
+(70, 4, 11719, NULL, '2026-05-26 10:11:00', 'single', NULL, NULL, NULL, NULL),
+(71, 4, 11721, NULL, '2026-05-26 13:48:00', 'single', NULL, NULL, NULL, NULL);
 
 --
 -- Indexes for dumped tables
@@ -212,7 +216,7 @@ ALTER TABLE `device_heartbeats`
 -- AUTO_INCREMENT for table `electric_bills`
 --
 ALTER TABLE `electric_bills`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=19;
 
 --
 -- AUTO_INCREMENT for table `houses`
@@ -224,7 +228,7 @@ ALTER TABLE `houses`
 -- AUTO_INCREMENT for table `meter_readings`
 --
 ALTER TABLE `meter_readings`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=65;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=72;
 
 --
 -- Constraints for dumped tables

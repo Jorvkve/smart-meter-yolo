@@ -1,102 +1,139 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="th">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>สถิติรายเดือน</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<link rel="stylesheet" href="/css/style.css">
-</head>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>สถิติรายเดือน</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="/css/style.css" />
+  </head>
 
-<body>
-<nav class="navbar navbar-expand-lg app-navbar">
-<div class="container">
-<a class="navbar-brand" href="/">Smart Meter</a>
-<div class="nav-actions">
-<a class="nav-link" href="/daily">รายวัน</a>
-<a class="nav-link active" href="/monthly">รายเดือน</a>
-<a class="nav-link" href="/billing">บิลค่าไฟ</a>
-<a class="nav-link" href="/admin">ผู้ดูแล</a>
-</div>
-</div>
-</nav>
+  <body>
+    <nav class="navbar navbar-expand-lg app-navbar">
+      <div class="container">
+        <a class="navbar-brand" href="/">Smart Meter</a>
+        <div class="nav-actions">
+          <a class="nav-link" href="/daily">รายวัน</a>
+          <a class="nav-link active" href="/monthly">รายเดือน</a>
+          <a class="nav-link" href="/billing">บิลค่าไฟ</a>
+          <a class="nav-link" href="/admin">ผู้ดูแล</a>
+        </div>
+      </div>
+    </nav>
 
-<main class="container page-shell">
-<section class="page-heading">
-<div>
-<p class="eyebrow">ภาพรวมรายเดือน</p>
-<h1>สถิติรายเดือน</h1>
-</div>
-<p class="heading-copy">เลือกบ้านเพื่อดูแนวโน้มค่าไฟและหน่วยไฟรายเดือน ส่วนการคำนวณเพื่อออกบิลแยกไปที่หน้าบิลค่าไฟ</p>
-</section>
+    <main class="container page-shell">
+      <section class="page-heading">
+        <div>
+          <p class="eyebrow">ภาพรวมรายเดือน</p>
+          <h1>สถิติรายเดือน</h1>
+        </div>
+        <p class="heading-copy">
+          เลือกบ้านเพื่อดูแนวโน้มค่าไฟและหน่วยไฟรายเดือน
+          โดยอิงเลขมิเตอร์ในรอบตัดบิลวันที่ 15 เวลา 12:00-12:59
+        </p>
+      </section>
 
-<section class="surface-panel mb-4">
-<div class="panel-header">
-<div>
-<p class="eyebrow">ตัวกรอง</p>
-<h2>เลือกบ้านสำหรับดูภาพรวม</h2>
-</div>
-</div>
-<div class="monthly-filter-grid">
-<label class="rate-field">
-<span>บ้าน</span>
-<select id="houseSelect" class="form-select"></select>
-</label>
-<label class="rate-field">
-<span>บาทต่อหน่วย (สำหรับแปลงเป็นค่าไฟ)</span>
-<input id="unitRate" class="form-control" type="number" min="0" step="0.01" value="4.20">
-</label>
-</div>
-</section>
+      <section class="surface-panel mb-4">
+        <div class="panel-header">
+          <div>
+            <p class="eyebrow">ตัวกรอง</p>
+            <h2>เลือกบ้านสำหรับดูภาพรวม</h2>
+          </div>
+        </div>
+        <div class="monthly-filter-grid">
+          <label class="rate-field">
+            <span>บ้าน</span>
+            <select id="houseSelect" class="form-select"></select>
+          </label>
+          <label class="rate-field">
+            <span>บาทต่อหน่วย (สำหรับแปลงเป็นค่าไฟ)</span>
+            <input
+              id="unitRate"
+              class="form-control"
+              type="number"
+              min="0"
+              step="0.0001"
+              value="3.2484"
+            />
+          </label>
+        </div>
+        <p class="empty-note mt-3">
+          กราฟรายเดือนคำนวณจากเลขมิเตอร์สะสมของเดือนนี้ลบเดือนก่อนหน้า
+          โดยเลือกเฉพาะรายการอ่านมิเตอร์ในช่วงตัดรอบบิล
+        </p>
+      </section>
 
-<section class="bill-summary-grid mb-4">
-<div class="summary-card">
-<span>ค่าไฟเดือนล่าสุด</span>
-<strong id="latestBill">-</strong>
-</div>
-<div class="summary-card">
-<span>หน่วยไฟเดือนล่าสุด</span>
-<strong id="latestUnits">-</strong>
-</div>
-<div class="summary-card">
-<span>บ้านที่เลือก</span>
-<strong id="selectedHouseName">-</strong>
-</div>
-</section>
+      <section class="bill-summary-grid mb-4">
+        <div class="summary-card">
+          <span>ค่าไฟเดือนล่าสุด</span>
+          <strong id="latestBill">-</strong>
+        </div>
+        <div class="summary-card">
+          <span>หน่วยไฟเดือนล่าสุด</span>
+          <strong id="latestUnits">-</strong>
+        </div>
+        <div class="summary-card">
+          <span>บ้านที่เลือก</span>
+          <strong id="selectedHouseName">-</strong>
+        </div>
+      </section>
 
-<section class="surface-panel monthly-chart-panel mb-4">
-<div class="panel-header monthly-chart-header">
-<div>
-<p id="monthlyTrendEyebrow" class="eyebrow">หน่วยไฟ</p>
-<h2 id="monthlyTrendTitle">กราฟหน่วยไฟรายเดือนของบ้านที่เลือก</h2>
-</div>
-<div class="chart-panel-controls" aria-label="สลับกราฟรายเดือน">
-<button id="prevChartBtn" class="chart-nav-btn" type="button" aria-label="กราฟก่อนหน้า">&lt;</button>
-<span id="monthlyTrendCounter" class="chart-counter">1 / 2</span>
-<button id="nextChartBtn" class="chart-nav-btn" type="button" aria-label="กราฟถัดไป">&gt;</button>
-</div>
-</div>
-<div class="chart-frame chart-frame-lg bill-chart-frame">
-<canvas id="monthlyTrendChart"></canvas>
-</div>
-<p id="monthlyTrendEmpty" class="empty-note mt-3"></p>
-<div class="meter-reading-panel mt-4">
-<div class="meter-reading-header">
-<div>
-<p class="eyebrow">เลขมิเตอร์จริง</p>
-<h3>เลขมิเตอร์สะสมที่ใช้คำนวณรายเดือน</h3>
-</div>
-<span class="meter-reading-caption">เดือนนี้ - เดือนก่อนหน้า = หน่วยที่ใช้</span>
-</div>
-<div id="meterReadingList" class="meter-reading-list"></div>
-</div>
-</section>
-</main>
+      <section class="surface-panel monthly-chart-panel mb-4">
+        <div class="panel-header monthly-chart-header">
+          <div>
+            <p id="monthlyTrendEyebrow" class="eyebrow">หน่วยไฟ</p>
+            <h2 id="monthlyTrendTitle">กราฟหน่วยไฟรายเดือนของบ้านที่เลือก</h2>
+          </div>
+          <div class="chart-panel-controls" aria-label="สลับกราฟรายเดือน">
+            <button
+              id="prevChartBtn"
+              class="chart-nav-btn"
+              type="button"
+              aria-label="กราฟก่อนหน้า"
+            >
+              &lt;
+            </button>
+            <span id="monthlyTrendCounter" class="chart-counter">1 / 2</span>
+            <button
+              id="nextChartBtn"
+              class="chart-nav-btn"
+              type="button"
+              aria-label="กราฟถัดไป"
+            >
+              &gt;
+            </button>
+          </div>
+        </div>
+        <div class="chart-frame chart-frame-lg bill-chart-frame">
+          <canvas id="monthlyTrendChart"></canvas>
+        </div>
+        <p id="monthlyTrendEmpty" class="empty-note mt-3"></p>
+        <div class="meter-reading-panel mt-4">
+          <div class="meter-reading-header">
+            <div>
+              <p class="eyebrow">เลขมิเตอร์จริง</p>
+              <h3>เลขมิเตอร์สะสมที่ใช้คำนวณรายเดือน</h3>
+            </div>
+            <span class="meter-reading-caption"
+              >เลขวันที่ 15 เดือนนี้ - เลขวันที่ 15 เดือนก่อนหน้า =
+              หน่วยที่ใช้</span
+            >
+          </div>
+          <div id="meterReadingList" class="meter-reading-list"></div>
+        </div>
+      </section>
+    </main>
 
-<script src="../js/monthly.js"></script>
-</body>
+    <script src="../js/monthly.js"></script>
+  </body>
 </html>

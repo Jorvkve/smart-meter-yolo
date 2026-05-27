@@ -37,7 +37,8 @@
           <h1>บิลค่าไฟ</h1>
         </div>
         <p class="heading-copy">
-          เลือกบ้านและช่วงเดือนเพื่อคำนวณค่าไฟแบบหอพัก จากนั้นสร้างบิลและบันทึกประวัติไว้ตรวจสอบย้อนหลัง
+          เลือกบ้านและช่วงเดือนเพื่อคำนวณค่าไฟแบบหอพัก
+          จากนั้นสร้างบิลและบันทึกประวัติไว้ตรวจสอบย้อนหลัง
         </p>
       </section>
 
@@ -69,8 +70,8 @@
               class="form-control"
               type="number"
               min="0"
-              step="0.01"
-              value="4.20"
+              step="0.0001"
+              value="3.2484"
             />
           </label>
           <button id="calculateBillBtn" class="btn btn-primary">
@@ -82,7 +83,8 @@
         </div>
 
         <p class="empty-note mt-3">
-          เดโม่ใช้เลขมิเตอร์รายการแรกของแต่ละเดือนเป็นตัวแทนรอบบิล ส่วนการใช้งานจริงควรกำหนดวัน/เวลาตัดรอบบิล เช่น ทุกวันที่ 15 เวลา 12:00
+          ระบบใช้เลขมิเตอร์รอบตัดบิลวันที่ 15 เวลา 12:00-12:59
+          ของเดือนต้นทางและเดือนปลายทางมาลบกันเพื่อหาหน่วยไฟที่ใช้
         </p>
       </section>
 
@@ -163,6 +165,14 @@
             <span>รอบเดือน</span>
             <input id="historyMonthFilter" class="form-control" type="month" />
           </label>
+          <label class="rate-field">
+            <span>สถานะ</span>
+            <select id="historyStatusFilter" class="form-select">
+              <option value="">ทุกสถานะ</option>
+              <option value="active">Active</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </label>
           <button id="clearHistoryFilterBtn" class="btn btn-outline-secondary">
             ล้างตัวกรอง
           </button>
@@ -171,7 +181,6 @@
           <p class="empty-note">ยังไม่มีประวัติบิล</p>
         </div>
       </section>
-
     </main>
 
     <div
@@ -181,14 +190,21 @@
       aria-modal="true"
       aria-labelledby="billHistoryDetailTitle"
     >
-      <div class="review-modal-backdrop" onclick="closeBillHistoryDetail()"></div>
+      <div
+        class="review-modal-backdrop"
+        onclick="closeBillHistoryDetail()"
+      ></div>
       <section class="review-modal-panel bill-history-detail-panel">
         <div class="panel-header">
           <div>
             <p class="eyebrow">รายละเอียดบิล</p>
             <h2 id="billHistoryDetailTitle">รายละเอียดค่าไฟ</h2>
           </div>
-          <button class="btn btn-outline-secondary btn-sm" type="button" onclick="closeBillHistoryDetail()">
+          <button
+            class="btn btn-outline-secondary btn-sm"
+            type="button"
+            onclick="closeBillHistoryDetail()"
+          >
             ปิด
           </button>
         </div>
@@ -197,7 +213,14 @@
           <button id="detailViewBillBtn" class="btn btn-primary" type="button">
             ดูใบแจ้งค่าไฟ
           </button>
-          <button class="btn btn-outline-secondary" type="button" onclick="closeBillHistoryDetail()">
+          <button id="detailCancelBillBtn" class="btn btn-danger" type="button">
+            Cancel bill
+          </button>
+          <button
+            class="btn btn-outline-secondary"
+            type="button"
+            onclick="closeBillHistoryDetail()"
+          >
             ยกเลิก
           </button>
         </div>

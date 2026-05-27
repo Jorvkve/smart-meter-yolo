@@ -14,8 +14,8 @@ This is a Smart Meter backend and static dashboard project. It combines:
 Open TODO:
 
 - `TODO.md` tracks the ESP32-CAM burst flow: the experimental firmware captures 10 frames and sends them as burst `images` uploads. The backend selects the best frame.
-- `TODO.md` also tracks the monthly billing cutoff issue: `/monthly` currently uses the first reading of each month, but it should eventually choose readings nearest a configured billing cutoff day/time.
-- Target sampling policy: daily dashboard readings should be selected snapshots every 1 or 3 hours; monthly billing should use the configured billing cutoff; near each scheduled reading, ESP32-CAM should run a 5-minute burst window with one frame every 30 seconds, then store only the selected best reading.
+- Monthly billing uses the configured cutoff: day 15 from 12:00:00 to before 13:00:00.
+- Target sampling policy: daily dashboard readings should be selected snapshots every 1 or 3 hours; monthly billing uses the configured cutoff; near each scheduled reading, ESP32-CAM should run a 5-minute burst window with one frame every 30 seconds, then store only the selected best reading.
 - Experimental scheduled burst firmware lives in `wifi_pic_tune_burst/wifi_pic_tune_burst.ino`. Keep `wifi_pic_tune/wifi_pic_tune.ino` as the stable single-image sketch unless the user explicitly asks to change it.
 - `/billing` saves generated dorm-style electricity bills into `electric_bills` and shows bill history for review.
 
@@ -144,6 +144,7 @@ Reading/billing endpoints in `routes/readings.js`:
 - `GET /api/readings/monthly-bills?rate=4.2`
 - `GET /api/readings/bill-history`
 - `POST /api/readings/bill-history`
+- `PATCH /api/readings/bill-history/:id/cancel`
 
 ## Billing Logic
 
@@ -156,20 +157,21 @@ May bill usage = May meter reading - April meter reading
 May bill amount = usage * unit rate
 ```
 
-If readings are collected on the 10th of every month, this still works:
+For the current configured cutoff, readings should exist on the 15th of each month between 12:00:00 and before 13:00:00:
 
 ```text
-May usage = reading on May 10 - reading on April 10
+May usage = reading on May 15 12:00-12:59 - reading on April 15 12:00-12:59
 ```
 
 Implementation details:
 
-- `monthly-bills` uses the first reading found in each month per house.
-- It uses SQL `ROW_NUMBER()` to select the first reading of each month.
+- `monthly-bills` uses readings on the configured billing cutoff: day 15 from 12:00:00 to before 13:00:00.
+- It uses SQL `ROW_NUMBER()` to select the first reading inside each cutoff window per month.
 - It uses SQL `LAG()` to get the previous month reading.
 - A house needs at least two months of readings to produce one monthly bill point.
 - `/billing` is for manual bill-range calculation, bill generation, print/PDF, and bill history.
 - Generated bills are stored in `electric_bills`; the table is created automatically by `routes/readings.js` if it does not exist.
+- Bill history cancellation marks `electric_bills.status = 'cancelled'` and stores `cancelled_at` / `cancel_reason`; it must not delete source `meter_readings`.
 - Billing is dorm-style: usage units multiplied by the configured unit rate. Do not add tax, Ft, service fees, or other utility-company charges unless the user explicitly asks.
 - `/monthly` is only for viewing charts/overview for a selected house.
 

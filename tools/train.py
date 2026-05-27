@@ -17,11 +17,11 @@
 from ultralytics import YOLO
 
 def main():
-    model = YOLO("runs/detect/train-7/weights/best.pt")  # 👈 ใช้ของเดิม
+    model = YOLO("runs/detect/train-7/weights/best.pt")
 
     model.train(
         data="data_digits.yaml",
-        epochs=150,     # 👈 เพิ่ม
+        epochs=150,    
         imgsz=640,
         batch=4,
         device=0,

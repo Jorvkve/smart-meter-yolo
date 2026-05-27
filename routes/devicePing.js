@@ -2,6 +2,13 @@ const express = require("express");
 const router = express.Router();
 const db = require("../db");
 
+/*
+==============================
+API สถานะอุปกรณ์ ESP32-CAM
+==============================
+*/
+
+// สร้างตาราง device_heartbeats ถ้ายังไม่มี เพื่อเก็บสถานะล่าสุดของอุปกรณ์แต่ละตัว
 function ensureDevicePingTable(callback) {
   const sql = `
     CREATE TABLE IF NOT EXISTS device_heartbeats (
@@ -25,12 +32,14 @@ function ensureDevicePingTable(callback) {
   db.query(sql, callback);
 }
 
-ensureDevicePingTable(err => {
+// เตรียมตารางตั้งแต่ตอนโหลด route เพื่อให้ POST/GET ใช้งานได้ทันที
+ensureDevicePingTable((err) => {
   if (err) {
     console.warn("Could not create device_heartbeats table:", err.message);
   }
 });
 
+// ใช้โดย ESP32-CAM เพื่อส่ง ping/heartbeat มาบอก backend ว่าอุปกรณ์ยังออนไลน์อยู่
 router.post("/", (req, res) => {
   const deviceId = String(req.body.device_id || "").trim();
   const houseId = req.body.house_id ? Number(req.body.house_id) : null;
@@ -69,7 +78,7 @@ router.post("/", (req, res) => {
   db.query(
     sql,
     [deviceId, houseId, ipAddress, uptimeMs, freeHeap, wifiRssi, statusMessage],
-    err => {
+    (err) => {
       if (err) {
         console.log(err);
         return res.status(500).json({
@@ -83,10 +92,11 @@ router.post("/", (req, res) => {
         house_id: houseId,
         status: statusMessage,
       });
-    }
+    },
   );
 });
 
+// ใช้ในหน้า /admin เพื่อดึงรายการอุปกรณ์ทั้งหมด พร้อมคำนวณว่า online หรือ offline จากเวลา last_seen
 router.get("/", (req, res) => {
   const sql = `
     SELECT
@@ -94,8 +104,8 @@ router.get("/", (req, res) => {
       h.house_name,
       TIMESTAMPDIFF(SECOND, d.last_seen, NOW()) AS seconds_since_seen,
       CASE
-        WHEN TIMESTAMPDIFF(SECOND, d.last_seen, NOW()) <= 600 THEN 1
-        ELSE 0
+        WHEN TIMESTAMPDIFF(SECOND, d.last_seen, NOW()) <= 600 THEN 1 -- ถ้า ping ล่าสุดไม่เกิน 10 นาที ถือว่า online
+        ELSE 0 -- -- ถ้าเกิน 10 นาที ถือว่า offline
       END AS is_online
     FROM device_heartbeats d
     LEFT JOIN houses h ON h.id = d.house_id

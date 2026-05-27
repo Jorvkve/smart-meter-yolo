@@ -1,60 +1,42 @@
 # TODO
 
-รายการนี้เหลือเฉพาะงานที่ยังต้องทำต่อจริงๆ หลังจากระบบหลัก, ESP32-CAM burst upload, burst metadata, หน้า daily/monthly/billing/admin และการแก้เลขมิเตอร์ทำงานได้แล้ว
+อัปเดตล่าสุด: 2026-05-26
 
-## 1. ESP32-CAM Sampling Policy
+## Done
 
-สถานะปัจจุบัน:
+- ESP32-CAM hourly burst sampling tested on real hardware.
+- Burst upload works normally.
+- Backend predicts every burst frame, selects the best frame, and saves only the selected reading.
+- `/daily` updates normally after the hourly capture.
+- `/admin` shows burst metadata and selected-frame information correctly.
+- `/billing` can create bills and save bill history.
+- Bill history can mark a bill as cancelled without deleting source meter readings.
+- Bill history has search, house filter, billing-month filter, and status filter.
+- Billing-month filter now matches the bill end month only. For example, filtering `2026-04` shows `2026-03 - 2026-04`, not `2026-04 - 2026-05`.
+- Monthly billing cutoff now uses readings on day 15 from 12:00:00 to before 13:00:00.
+- `/monthly` and `/billing` calculate usage from cutoff reading difference, not the first reading of each month.
 
-- ใช้ไฟล์ `wifi_pic_tune_burst/wifi_pic_tune_burst.ino` สำหรับโหมด burst
-- ตัว stable รูปเดียวอยู่ที่ `wifi_pic_tune/wifi_pic_tune.ino` และยังไม่ควรแก้ถ้าไม่ได้ตั้งใจ
-- Burst ตอนนี้ตั้งเป็น 10 เฟรม ห่างกัน 30 วินาที เพื่อให้ backend คัดภาพจากช่วงเวลาประมาณ 5 นาที
-- รอบถ่ายปัจจุบันตั้งเป็นทุก 1 ชั่วโมง
-- Backend รองรับ burst แล้ว โดยอ่านทุกเฟรม เลือกเฟรมที่ดีที่สุด และบันทึกเฉพาะค่าที่เลือกลง `meter_readings`
-- Metadata ของ burst ถูกเก็บใน `meter_readings` แล้ว เช่น `capture_mode`, `selected_frame`, `selection_reason`, `avg_conf`, `frames_summary`
+## Remaining
 
-สิ่งที่ต้องทำต่อ:
+### 1. Sampling Interval Decision
 
-- ตั้งกล้องทดสอบจริงให้ถ่ายทุก 1 ชั่วโมง แล้วดูว่าระบบบันทึกค่าเข้าฐานข้อมูลต่อเนื่องหรือไม่
-- ตรวจในหน้า `/daily` ว่ากราฟรายชั่วโมงของแต่ละบ้านขึ้นถูกต้อง
-- ตรวจในหน้า `/admin` ว่ารายการที่มาจาก burst แสดงเฟรมที่เลือกและเหตุผลการเลือกถูกต้อง
-- ถ้าชั่วโมงไหนอ่านไม่ได้ ให้ใช้หน้า `/admin` ตรวจ/แก้เลขมิเตอร์ย้อนหลัง
-- หลังทดสอบจริง ค่อยตัดสินใจว่าจะใช้รอบถ่ายทุก 1 ชั่วโมงหรือ 3 ชั่วโมงสำหรับระบบจริง
+Current behavior:
 
-## 2. Monthly Billing Cutoff
+- ESP32-CAM burst capture is set to run every 1 hour.
 
-สถานะปัจจุบัน:
+Needed:
 
-- `/monthly` และ API รายเดือนยังใช้แนวคิดเลือก reading แรกของแต่ละเดือน
-- การคำนวณรายเดือนคือ reading เดือนนี้ ลบ reading เดือนก่อนหน้า
-- วิธีนี้พอใช้สำหรับเดโม่ แต่ยังไม่ใช่ logic รอบบิลจริง
+- Decide whether the final system should keep 1-hour sampling or change to 3-hour sampling.
+- Recommendation for demo and short-term testing: keep 1-hour sampling.
+- Recommendation for lower storage/network use: switch to 3-hour sampling later.
 
-สิ่งที่ต้องทำต่อ:
+## Later
 
-- กำหนดวัน/เวลาตัดรอบบิลให้ชัด เช่น ทุกวันที่ 15 เวลา 12:00
-- เปลี่ยน logic รายเดือนให้เลือก reading ที่ใกล้วัน/เวลาตัดรอบบิลที่สุด แทนการใช้ reading แรกของเดือน
-- ปรับ `/monthly` และ `/billing` ให้แสดงด้วยว่าค่าที่ใช้คำนวณมาจากเวลาไหน
-- อธิบายกับอาจารย์ได้ว่าในระบบจริง “ค่าไฟเดือนนี้” มาจากค่ามิเตอร์ ณ รอบบิลเดือนนี้ ลบค่ามิเตอร์ ณ รอบบิลเดือนก่อน
+### Model Training
 
-## 3. Bill History Management
+Not urgent for the current system, but useful if there is time:
 
-สถานะปัจจุบัน:
-
-- `/billing` สร้างบิลได้
-- ประวัติบิลถูกเก็บในตาราง `electric_bills`
-- หน้า `/billing` แสดงประวัติบิลและเปิดดูรายละเอียดบิลได้
-
-สิ่งที่ต้องทำต่อ:
-
-- เพิ่มวิธีจัดการกรณีสร้างบิลผิด เช่น ปุ่มลบบิล หรือปุ่มยกเลิกบิล
-- ถ้าลบบิล ให้ลบเฉพาะประวัติบิล ไม่ควรลบข้อมูลมิเตอร์ต้นทาง
-- ถ้าทำแบบยกเลิกบิล ควรเพิ่มสถานะ เช่น `active` / `cancelled` เพื่อเก็บประวัติไว้ตรวจสอบย้อนหลัง
-
-## Later: Model Training
-
-ไม่ใช่งานด่วนของระบบตอนนี้ แต่ควรทำถ้ามีเวลา:
-
-- เพิ่มภาพ training จาก ESP32-CAM จริง โดยเฉพาะเลขที่สับสน เช่น `8`/`9`, `0`/`8`
-- เพิ่มภาพจาก burst ที่อ่านผิดเข้า dataset พร้อม label ที่ถูกต้อง
-- เทรนโมเดลรอบใหม่ เช่น `train-9`
-- ทดสอบเทียบผลก่อน/หลังเทรนกับภาพ ESP32-CAM และ iPhone
+- Add more real ESP32-CAM images to the dataset, especially confusing digits such as `8`/`9` and `0`/`8`.
+- Add wrongly predicted burst frames with correct labels.
+- Train a new model, for example `train-9`.
+- Compare the new model against `train-8` using ESP32-CAM and iPhone test images.
