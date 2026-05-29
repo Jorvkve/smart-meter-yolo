@@ -181,7 +181,10 @@ router.delete("/:id", (req, res) => {
 // ใช้ในหน้า /admin สำหรับแก้ไขเลข reading_value ของ reading หนึ่งรายการ
 router.put("/:id", (req, res) => {
   const readingId = Number(req.params.id);
-  const readingValue = Number(req.body.reading_value);
+  const rawReadingValue = req.body.reading_value;
+  const readingValueText =
+    typeof rawReadingValue === "string" ? rawReadingValue.trim() : rawReadingValue;
+  const readingValue = Number(readingValueText);
 
   if (!Number.isInteger(readingId) || readingId <= 0) {
     return res.status(400).json({
@@ -189,9 +192,15 @@ router.put("/:id", (req, res) => {
     });
   }
 
-  if (!Number.isFinite(readingValue) || readingValue < 0) {
+  if (
+    readingValueText === undefined ||
+    readingValueText === null ||
+    readingValueText === "" ||
+    !Number.isFinite(readingValue) ||
+    readingValue < 0
+  ) {
     return res.status(400).json({
-      error: "reading_value must be a positive number",
+      error: "reading_value must be a non-negative number",
     });
   }
 

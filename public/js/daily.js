@@ -713,7 +713,7 @@ function createDailyMeterChart(canvas, houseName, labels, data, index) {
           pointBorderColor: color,
           pointBorderWidth: 2,
           tension: 0.35,
-          spanGaps: false, // ถ้าข้อมูลเป็น null จะไม่ลากเส้นข้ามช่องว่าง
+          spanGaps: true, // ถ้าข้อมูลเป็น null จะไม่ลากเส้นข้ามช่องว่าง
           fill: true,
         },
       ],

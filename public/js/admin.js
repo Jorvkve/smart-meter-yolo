@@ -829,11 +829,12 @@ function closeReadingEditor() {
 
 // บันทึกเลขมิเตอร์ที่แก้แล้วกลับลง meter_readings
 async function saveReadingValue() {
-  const value = Number(document.getElementById("reviewReadingValue").value); // อ่านค่าใหม่จาก input
+  const rawValue = document.getElementById("reviewReadingValue").value.trim();
+  const value = Number(rawValue); // อ่านค่าใหม่จาก input
 
   if (!editingReadingId) return; // ถ้ายังไม่ได้เลือก reading หรือค่าไม่ถูกต้อง ให้หยุด
   // ตรวจว่าเป็นตัวเลขจริง และห้ามเป็นค่าติดลบ
-  if (!Number.isFinite(value) || value < 0) {
+  if (rawValue === "" || !Number.isFinite(value) || value < 0) {
     return alert("กรุณากรอกเลขมิเตอร์ให้ถูกต้อง");
   }
 

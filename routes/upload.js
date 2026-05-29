@@ -10,6 +10,7 @@ const db = require("../db");
 const execFileAsync = promisify(execFile);
 const EXPECTED_DIGIT_COUNT = 5;
 const CLOSE_TRANSITION_UNIT_WINDOW = 20;
+const KEEP_UNSELECTED_BURST_FRAMES = true; // เก็บภาพ burst
 
 /*
 ==============================
@@ -404,7 +405,9 @@ router.post("/", upload.any(), async (req, res) => {
   let selectionReason = manualReading !== null ? "manual_reading" : null;
   let latestReading = null;
   const keepFrames =
-    String(req.body.keep_frames || "").toLowerCase() === "true";
+    req.body.keep_frames === undefined
+      ? KEEP_UNSELECTED_BURST_FRAMES
+      : String(req.body.keep_frames).toLowerCase() === "true";
 
   // ถ้าไม่มี manual reading ค่อยเรียกโมเดล
   if (readingValue === null) {
@@ -440,7 +443,7 @@ router.post("/", upload.any(), async (req, res) => {
         prediction = selection.selected.prediction;
         readingValue = selection.selected.reading_value;
 
-        // ลบไฟล์ที่ไม่ถูกเลือก
+        // ลบไฟล์ที่ไม่ถูกเลือก ถ้าปิดการเก็บ unselected burst frames
         if (imageFiles.length > 1 && !keepFrames) {
           deleteUnselectedBurstFiles(imageFiles, selectedFile);
         }

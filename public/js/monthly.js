@@ -218,9 +218,9 @@ async function loadSelectedHouseHistory() {
   // เอาข้อมูล rows ที่ได้จาก API มากรองให้เหลือเฉพาะบ้านที่ผู้ใช้เลือกอยู่
   // ถ้า payload.rows ไม่มีค่า ให้ใช้ array ว่างแทน เพื่อป้องกัน error
   const payload = await res.json();
-  monthlyHistory = (payload.rows || []).filter(
-    (row) => String(row.house_id) === String(houseSelect.value),
-  );
+  monthlyHistory = (payload.rows || [])
+    .filter((row) => String(row.house_id) === String(houseSelect.value))
+    .slice(-12); // เอาแค่ 12 เดือนล่าสุดของบ้านที่เลือกมาแสดง
 
   const houseName = houseSelect.options[houseSelect.selectedIndex]?.text || "-"; // ดึงชื่อบ้าน/ห้องที่ผู้ใช้เลือกจาก dropdown
   const latest = monthlyHistory[monthlyHistory.length - 1]; // ดึงข้อมูลบิลเดือนล่าสุดจาก monthlyHistory
