@@ -1422,6 +1422,64 @@ h3 {
   white-space: nowrap;
 }
 
+.daily-usage-summary {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.85fr) minmax(160px, 1fr);
+  gap: 8px 14px;
+  align-items: center;
+  margin: 8px 0 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(217, 226, 236, 0.86);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.daily-usage-summary div {
+  display: grid;
+  gap: 2px;
+}
+
+.daily-usage-summary span {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 900;
+}
+
+.daily-usage-summary strong {
+  color: #093c5d;
+  font-size: 1.06rem;
+  font-weight: 900;
+}
+
+.daily-usage-summary p {
+  margin: 0;
+  color: var(--ink);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.daily-usage-summary p span {
+  display: inline;
+  margin: 0 5px;
+  color: var(--muted);
+}
+
+.daily-usage-summary small {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.daily-usage-summary.partial small {
+  color: #92400e;
+}
+
+.daily-usage-summary.warning strong,
+.daily-usage-summary.warning small {
+  color: #b42318;
+}
+
 .daily-chart-day-nav {
   position: relative;
   display: flex;

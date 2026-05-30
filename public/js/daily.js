@@ -595,6 +595,7 @@ function renderDailyHouseCharts(houses, readingGroups) {
       const houseId = String(house.id);
       const calendarMonthKey = getSelectedCalendarMonthKey(houseId, dateKey);
       const isCalendarOpen = activeDailyCalendarHouseId === houseId;
+      const usageSummary = buildDailyUsageSummary(readings, dateKey); // readings ของบ้านนี้ + วันที่ที่เลือก ไปคำนวณสรุปการใช้ไฟ
 
       return `
       <article class="daily-house-chart-card">
@@ -635,6 +636,7 @@ function renderDailyHouseCharts(houses, readingGroups) {
             >&gt;</button>
           </div>
         </div>
+        ${renderDailyUsageSummary(usageSummary)} <!-- กล่อง “หน่วยที่ใช้วันนี้” -->
         <div class="chart-frame daily-chart-frame">
           <canvas id="dailyHouseChart-${house.id}"></canvas>
         </div>
@@ -665,11 +667,9 @@ function renderDailyHouseCharts(houses, readingGroups) {
   });
 }
 
-// นำ reading_value ไปวางในช่องชั่วโมงที่ตรงกับ reading_time
-function buildHourlyMeterSeries(readings, dateKey) {
-  const hourly = Array(24).fill(null); // สร้าง array 24 ช่อง สำหรับ 24 ชั่วโมง ถ้า reading เวลา 13:20 จะเอาค่าไปใส่ hourly[13]
-
-  readings
+// ดึง readings ของบ้านในวันที่เลือก แล้วเรียงตามเวลาเพื่อใช้ทั้งกราฟและสรุปหน่วยรายวัน
+function getReadingsForDate(readings, dateKey) {
+  return readings
     .filter((reading) => reading.reading_value != null) // ใช้เฉพาะ readings ที่มีค่าเลขมิเตอร์จริง
     .map((reading) => ({
       ...reading, // เพิ่ม parsedDate เข้าไปใน reading เพื่อใช้ดึงวัน/ชั่วโมง
@@ -681,12 +681,82 @@ function buildHourlyMeterSeries(readings, dateKey) {
         !Number.isNaN(reading.parsedDate.getTime()) &&
         getDateKey(reading.parsedDate) === dateKey,
     ) // เอาเฉพาะ reading ที่วันที่ตรงกับวันที่เลือก
-    .sort((a, b) => a.parsedDate - b.parsedDate || Number(a.id) - Number(b.id)) // เรียงตามเวลา ถ้าเวลาเท่ากัน ใช้ id เป็นตัวช่วยเรียง
-    .forEach((reading) => {
-      hourly[reading.parsedDate.getHours()] = Number(reading.reading_value);
-    }); // เอาค่า reading ไปใส่ช่องชั่วโมงนั้น
+    .sort((a, b) => a.parsedDate - b.parsedDate || Number(a.id) - Number(b.id)); // เรียงตามเวลา ถ้าเวลาเท่ากัน ใช้ id เป็นตัวช่วยเรียง
+}
+
+// นำ reading_value ไปวางในช่องชั่วโมงที่ตรงกับ reading_time
+function buildHourlyMeterSeries(readings, dateKey) {
+  const hourly = Array(24).fill(null); // สร้าง array 24 ช่อง สำหรับ 24 ชั่วโมง ถ้า reading เวลา 13:20 จะเอาค่าไปใส่ hourly[13]
+
+  getReadingsForDate(readings, dateKey).forEach((reading) => {
+    hourly[reading.parsedDate.getHours()] = Number(reading.reading_value);
+  }); // เอาค่า reading ไปใส่ช่องชั่วโมงนั้น
 
   return hourly;
+}
+
+// คำนวณหน่วยไฟที่ใช้ในวันที่เลือกจากเลขมิเตอร์แรกสุดและล่าสุดของวันนั้น
+// usage = lastReading - firstReading
+function buildDailyUsageSummary(readings, dateKey) {
+  const readingsForDate = getReadingsForDate(readings, dateKey); // ดึงเฉพาะข้อมูล readings ของวันที่เลือก
+  const hoursWithData = new Set( // จำนวนชั่วโมงที่มีข้อมูล
+    readingsForDate.map((reading) => reading.parsedDate.getHours()),
+  ).size;
+  const firstReading = readingsForDate[0] || null;
+  const lastReading = readingsForDate[readingsForDate.length - 1] || null;
+  const usage =
+    readingsForDate.length >= 2
+      ? Number(lastReading.reading_value) - Number(firstReading.reading_value)
+      : null;
+
+  return {
+    firstReading,
+    lastReading,
+    usage,
+    hoursWithData,
+    totalHours: 24,
+    isComplete: hoursWithData === 24,
+  };
+}
+
+// แสดงกล่องสรุปหน่วยไฟรายวันใต้หัวกราฟของแต่ละบ้าน
+function renderDailyUsageSummary(summary) {
+  if (!summary.firstReading || !summary.lastReading) {
+    return `
+      <div class="daily-usage-summary empty">
+        <span>หน่วยที่ใช้วันนี้</span>
+        <strong>-</strong>
+        <p>ยังไม่มีข้อมูลพอสำหรับคำนวณ</p>
+      </div>
+    `;
+  }
+
+  const coverageText = summary.isComplete
+    ? `ข้อมูลครบ ${summary.hoursWithData}/${summary.totalHours} ชั่วโมง`
+    : `ข้อมูลไม่ครบ คำนวณจากข้อมูลที่มี ${summary.hoursWithData}/${summary.totalHours} ชั่วโมง`;
+  const usageText =
+    summary.usage === null ? "-" : `${formatMeter(summary.usage)} kWh`;
+  const detailText =
+    summary.usage === null
+      ? "ต้องมีข้อมูลอย่างน้อย 2 จุดเพื่อคำนวณหน่วยที่ใช้"
+      : coverageText;
+
+  return `
+    <div class="daily-usage-summary ${summary.isComplete ? "complete" : "partial"} ${summary.usage < 0 ? "warning" : ""}">
+      <div>
+        <span>หน่วยที่ใช้วันนี้</span>
+        <strong>${usageText}</strong>
+      </div>
+      <p>
+        ${formatTimeOnly(summary.firstReading.reading_time)}
+        ${formatMeter(summary.firstReading.reading_value)}
+        <span>ถึง</span>
+        ${formatTimeOnly(summary.lastReading.reading_time)}
+        ${formatMeter(summary.lastReading.reading_value)}
+      </p>
+      <small>${detailText}</small>
+    </div>
+  `;
 }
 
 // สร้างกราฟเส้น Chart.js สำหรับเลขมิเตอร์รายชั่วโมงของบ้านหนึ่งหลัง
@@ -713,7 +783,7 @@ function createDailyMeterChart(canvas, houseName, labels, data, index) {
           pointBorderColor: color,
           pointBorderWidth: 2,
           tension: 0.35,
-          spanGaps: true, // ถ้าข้อมูลเป็น null จะไม่ลากเส้นข้ามช่องว่าง
+          spanGaps: true, // ถ้าข้อมูลเป็น null จะลากเส้นเชื่อมเฉพาะจุดที่มีข้อมูล
           fill: true,
         },
       ],
@@ -824,6 +894,19 @@ function formatThaiDate(value) {
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
+  });
+}
+
+// แสดงเฉพาะเวลา เช่น 00:00 หรือ 23:00
+function formatTimeOnly(value) {
+  if (!value) return "-";
+  const date = parseDateValue(value);
+  if (!date || Number.isNaN(date.getTime())) return "-";
+
+  return date.toLocaleTimeString("th-TH", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
   });
 }
 
