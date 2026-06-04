@@ -15,7 +15,7 @@ Open TODO:
 
 - `TODO.md` tracks the ESP32-CAM burst flow: the experimental firmware captures 10 frames and sends them as burst `images` uploads. The backend selects the best frame.
 - Monthly billing uses the configured cutoff: day 15 from 12:00:00 to before 13:00:00.
-- Target sampling policy: daily dashboard readings should be selected snapshots every 1 or 3 hours; monthly billing uses the configured cutoff; near each scheduled reading, ESP32-CAM should run a 5-minute burst window with one frame every 30 seconds, then store only the selected best reading.
+- Target sampling policy: daily dashboard readings should be selected snapshots every 1 hour; monthly billing uses the configured cutoff; near each scheduled reading, ESP32-CAM should capture 10 burst frames, 5 minutes apart, then store only the selected best reading. The next burst should be scheduled from the burst start time, not from the upload/finish time.
 - Experimental scheduled burst firmware lives in `wifi_pic_tune_burst/wifi_pic_tune_burst.ino`. Keep `wifi_pic_tune/wifi_pic_tune.ino` as the stable single-image sketch unless the user explicitly asks to change it.
 - `/billing` saves generated dorm-style electricity bills into `electric_bills` and shows bill history for review.
 
@@ -124,6 +124,8 @@ multipart/form-data:
   images: File
   images: File
   house_id: Text
+  reading_time: Text (optional, YYYY-MM-DD HH:mm:ss)
+  burst_duration_ms: Text/Number (optional fallback when reading_time is not sent)
 ```
 
 The single-image field `image` still works. When multiple files are uploaded, the backend predicts every frame and inserts only the selected best frame/result into `meter_readings`. The response includes `burst`, `frames`, `selected_frame`, `selection_reason`, and `previous_reading`.
@@ -132,7 +134,7 @@ By default, unselected burst image files are deleted after selection so the inte
 
 Important upload detail: Postman field key must be exactly `house_id`. Hidden Thai/Unicode marks before the key will make the backend receive a different field name.
 
-The upload route saves the image(s), tries to run `tools/predict_meter_reading.py` with `runs/detect/train-8/weights/best.pt`, then inserts a row into `meter_readings`. If `reading_value` is sent, it is used as a manual override and YOLO is skipped. If YOLO cannot read a value, the row is still saved with `reading_value = NULL` so it can be reviewed in `/admin`.
+The upload route saves the image(s), tries to run `tools/predict_meter_reading.py` with `runs/detect/train-8/weights/best.pt`, then inserts a row into `meter_readings`. If `reading_value` is sent, it is used as a manual override and YOLO is skipped. If YOLO cannot read a value, the row is still saved with `reading_value = NULL` so it can be reviewed in `/admin`. For burst uploads, Postman/manual tests can send `reading_time` in `YYYY-MM-DD HH:mm:ss`; otherwise firmware sends `burst_duration_ms` and the backend uses it to store `reading_time` as the approximate burst start time instead of the post-upload insert time.
 
 Reading/billing endpoints in `routes/readings.js`:
 

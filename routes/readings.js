@@ -234,6 +234,114 @@ API สำหรับ dashboard
 ==============================
 */
 
+// ใช้ในหน้า /admin เพื่อเปลี่ยน selected frame ของ burst โดยไม่ต้องรันโมเดลใหม่
+router.patch("/:id/selected-frame", (req, res) => {
+  const readingId = Number(req.params.id);
+  const frameIndex = Number(req.body.frame_index);
+
+  if (!Number.isInteger(readingId) || readingId <= 0) {
+    return res.status(400).json({
+      error: "reading id must be a positive integer",
+    });
+  }
+
+  if (!Number.isInteger(frameIndex) || frameIndex < 0) {
+    return res.status(400).json({
+      error: "frame_index must be a non-negative integer",
+    });
+  }
+
+  db.query(
+    "SELECT id, frames_summary FROM meter_readings WHERE id=? LIMIT 1",
+    [readingId],
+    (selectErr, rows) => {
+      if (selectErr) {
+        console.log(selectErr);
+        return res.status(500).json(selectErr);
+      }
+
+      if (!rows.length) {
+        return res.status(404).json({
+          error: "reading not found",
+        });
+      }
+
+      let frames = rows[0].frames_summary;
+      if (typeof frames === "string") {
+        try {
+          frames = JSON.parse(frames);
+        } catch (err) {
+          frames = null;
+        }
+      }
+
+      if (!Array.isArray(frames) || frames.length === 0) {
+        return res.status(400).json({
+          error: "reading has no burst frames",
+        });
+      }
+
+      const selectedFrame = frames.find(
+        (frame) => Number(frame.index) === frameIndex
+      );
+
+      if (!selectedFrame) {
+        return res.status(404).json({
+          error: "frame not found",
+        });
+      }
+
+      if (!selectedFrame.filename) {
+        return res.status(400).json({
+          error: "selected frame has no image filename",
+        });
+      }
+
+      const readingValue = Number(selectedFrame.reading_value);
+      const avgConf = Number(selectedFrame.avg_conf);
+      const updatedFrames = frames.map((frame) => ({
+        ...frame,
+        selected: Number(frame.index) === frameIndex,
+      }));
+
+      db.query(
+        `UPDATE meter_readings
+         SET image_filename=?,
+             selected_frame=?,
+             selection_reason=?,
+             reading_value=?,
+             avg_conf=?,
+             frames_summary=?
+         WHERE id=?`,
+        [
+          selectedFrame.filename,
+          frameIndex,
+          "manual_selected_frame",
+          Number.isFinite(readingValue) ? readingValue : null,
+          Number.isFinite(avgConf) ? avgConf : null,
+          JSON.stringify(updatedFrames),
+          readingId,
+        ],
+        (updateErr) => {
+          if (updateErr) {
+            console.log(updateErr);
+            return res.status(500).json(updateErr);
+          }
+
+          res.json({
+            message: "Selected frame updated",
+            id: readingId,
+            selected_frame: frameIndex,
+            image_filename: selectedFrame.filename,
+            reading_value: Number.isFinite(readingValue) ? readingValue : null,
+            avg_conf: Number.isFinite(avgConf) ? avgConf : null,
+          });
+        }
+      );
+    }
+  );
+});
+
 // route สำรองสำหรับ dashboard รายวัน; หน้า /daily ปัจจุบันใช้ /latest และ /api/readings เป็นหลัก
 router.get("/today", (req, res) => {
   const sql = `

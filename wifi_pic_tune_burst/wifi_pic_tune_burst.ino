@@ -6,7 +6,7 @@
 
   Flow:
   1. Wait for a scheduled reading interval.
-  2. Capture a burst: 10 frames, 30 seconds apart.
+  2. Capture a burst: 10 frames, 5 minutes apart.
   3. Upload all frames in one multipart request using field name "images".
   4. Backend selects the best reading and stores only that selected value.
 
@@ -28,10 +28,10 @@
 const char* ssid = "Jorvkve_2.4G";
 const char* password = "Tewit8123";
 
-const char* serverUrl = "http://192.168.1.157:3000/api/upload";
-const char* heartbeatUrl = "http://192.168.1.157:3000/api/device-ping";
-const char* houseId = "14";
-const char* deviceId = "esp32cam-house-14";
+const char* serverUrl = "http://192.168.1.184:3000/api/upload";
+const char* heartbeatUrl = "http://192.168.1.184:3000/api/device-ping";
+const char* houseId = "15";
+const char* deviceId = "esp32cam-house-15";
 
 /* ================= Camera Config copied from stable sketch ================= */
 const framesize_t photoFrameSize = FRAMESIZE_SXGA;
@@ -47,11 +47,11 @@ const int flashWarmupMs = 800;
 const int ambientWarmupMs = 1200;
 
 /* ================= Scheduled Burst Policy ================= */
-const bool runBurstOnBoot = false;
+const bool runBurstOnBoot = true;
 const unsigned long scheduledIntervalMs = 60UL * 60UL * 1000UL; // every 1 hour
 const unsigned long heartbeatIntervalMs = 5UL * 60UL * 1000UL; // every 5 minutes
-const int burstFrameCount = 10;
-const unsigned long burstFrameIntervalMs = 30000; // 30 seconds apart
+const int burstFrameCount = 2;
+const unsigned long burstFrameIntervalMs = 1UL * 60UL * 1000UL; // 5 minutes apart
 
 #define RED_LED 33
 
@@ -64,6 +64,8 @@ struct CapturedFrame {
 CapturedFrame burstFrames[burstFrameCount];
 unsigned long lastBurstMillis = 0;
 unsigned long lastHeartbeatMillis = 0;
+
+void sendHeartbeat(const char* statusMessage);
 
 void setLED(bool state) {
   digitalWrite(RED_LED, state ? LOW : HIGH);
@@ -278,6 +280,20 @@ void freeBurstFrames() {
   }
 }
 
+void waitWithHeartbeat(unsigned long durationMs) {
+  unsigned long start = millis();
+
+  while (millis() - start < durationMs) {
+    unsigned long now = millis();
+
+    if (now - lastHeartbeatMillis >= heartbeatIntervalMs) {
+      sendHeartbeat("alive");
+    }
+
+    delay(1000);
+  }
+}
+
 int captureBurstFrames() {
   freeBurstFrames();
   int captured = 0;
@@ -291,7 +307,7 @@ int captureBurstFrames() {
 
     if (i < burstFrameCount - 1) {
       Serial.printf("Waiting %lu ms for next burst frame\n", burstFrameIntervalMs);
-      delay(burstFrameIntervalMs);
+      waitWithHeartbeat(burstFrameIntervalMs);
     }
   }
 
@@ -309,7 +325,7 @@ void appendBytes(uint8_t *payload, size_t &offset, const uint8_t *data, size_t l
   offset += len;
 }
 
-bool uploadBurstFrames(int captured) {
+bool uploadBurstFrames(int captured, unsigned long burstDurationMs) {
   if (captured <= 0) {
     Serial.println("No burst frames to upload");
     return false;
@@ -328,9 +344,22 @@ bool uploadBurstFrames(int captured) {
     "--" + boundary + "\r\n"
     "Content-Disposition: form-data; name=\"device_id\"\r\n\r\n" +
     String(deviceId) + "\r\n";
+  String burstDurationPart =
+    "--" + boundary + "\r\n"
+    "Content-Disposition: form-data; name=\"burst_duration_ms\"\r\n\r\n" +
+    String(burstDurationMs) + "\r\n";
+  String keepFramesPart =
+    "--" + boundary + "\r\n"
+    "Content-Disposition: form-data; name=\"keep_frames\"\r\n\r\n"
+    "true\r\n";
 
   String tail = "--" + boundary + "--\r\n";
-  size_t totalLen = housePart.length() + devicePart.length() + tail.length();
+  size_t totalLen =
+    housePart.length() +
+    devicePart.length() +
+    burstDurationPart.length() +
+    keepFramesPart.length() +
+    tail.length();
 
   for (int i = 0; i < burstFrameCount; i++) {
     if (!burstFrames[i].ok) continue;
@@ -356,6 +385,8 @@ bool uploadBurstFrames(int captured) {
   size_t offset = 0;
   appendString(payload, offset, housePart);
   appendString(payload, offset, devicePart);
+  appendString(payload, offset, burstDurationPart);
+  appendString(payload, offset, keepFramesPart);
 
   for (int i = 0; i < burstFrameCount; i++) {
     if (!burstFrames[i].ok) continue;
@@ -432,12 +463,15 @@ void sendHeartbeat(const char* statusMessage) {
 }
 
 void runScheduledBurst() {
+  unsigned long burstStartMillis = millis();
+  lastBurstMillis = burstStartMillis;
+
   sendHeartbeat("burst_start");
   Serial.println("Starting scheduled burst");
   int captured = captureBurstFrames();
-  uploadBurstFrames(captured);
+  unsigned long burstDurationMs = millis() - burstStartMillis;
+  uploadBurstFrames(captured, burstDurationMs);
   freeBurstFrames();
-  lastBurstMillis = millis();
   sendHeartbeat("burst_finished");
   Serial.println("Scheduled burst finished");
 }

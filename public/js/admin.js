@@ -6,7 +6,10 @@ let deviceHeartbeats = []; // เก็บสถานะ ESP32-CAM
 let editingReadingId = null; // เก็บว่า modal กำลังแก้ reading id ไหน
 let currentReadingPage = 1; // ใช้ pagination ตาราง readings
 let lastReadingFilterSignature = ""; // ใช้ดูว่า filter เปลี่ยนไหม
-const HIGH_USAGE_WARNING = 2000; // ใช้เตือนถ้าเลขมิเตอร์เพิ่มมากผิดปกติ
+const METER_DIGIT_LENGTH = 5; // มิเตอร์ที่ใช้ในโปรเจกต์นี้อ่านเลขหลัก kWh ทั้งหมด 5 หลัก
+const METER_MAX_UNITS_PER_HOUR = 5; // ใช้เป็นช่วงเผื่อเวลาหลักล่างกำลังทดเลข ไม่ใช่เกณฑ์คิดค่าไฟ
+const METER_MIN_DIGIT_TOLERANCE = 5;
+const METER_MAX_DIGIT_TOLERANCE = 30;
 const DEFAULT_READING_SORT = "house_time";
 const DEFAULT_READING_STATUS = "";
 
@@ -69,21 +72,6 @@ function formatRelativeAge(seconds) {
 
   const totalDays = Math.round(totalHours / 24);
   return `${totalDays.toLocaleString("th-TH")} วันที่แล้ว`;
-}
-
-// แปลง uptime ของ ESP32-CAM จากมิลลิวินาทีเป็นวัน/ชั่วโมง/นาที
-function formatUptime(value) {
-  const uptimeMs = Number(value);
-  if (!Number.isFinite(uptimeMs) || uptimeMs < 0) return "-";
-
-  const minutes = Math.floor(uptimeMs / 60000);
-  const hours = Math.floor(minutes / 60);
-  const days = Math.floor(hours / 24);
-
-  if (days > 0) return `${days.toLocaleString("th-TH")} วัน ${hours % 24} ชม.`;
-  if (hours > 0)
-    return `${hours.toLocaleString("th-TH")} ชม. ${minutes % 60} นาที`;
-  return `${minutes.toLocaleString("th-TH")} นาที`;
 }
 
 // แปลงเลขมิเตอร์ให้อ่านง่าย
@@ -232,7 +220,7 @@ async function loadDeviceHeartbeats() {
 
   table.innerHTML = `
     <tr>
-      <td colspan="7" class="text-center text-muted py-4">กำลังโหลดสถานะอุปกรณ์...</td>
+      <td colspan="4" class="text-center text-muted py-4">กำลังโหลดสถานะอุปกรณ์...</td>
     </tr>
   `;
 
@@ -253,7 +241,7 @@ async function loadDeviceHeartbeats() {
     if (total) total.innerText = "-";
     table.innerHTML = `
       <tr>
-        <td colspan="7" class="text-center text-muted py-4">โหลดสถานะอุปกรณ์ไม่สำเร็จ</td>
+        <td colspan="4" class="text-center text-muted py-4">โหลดสถานะอุปกรณ์ไม่สำเร็จ</td>
       </tr>
     `;
   }
@@ -267,7 +255,7 @@ function renderDeviceHeartbeats() {
   if (deviceHeartbeats.length === 0) {
     table.innerHTML = `
       <tr>
-        <td colspan="7" class="text-center text-muted py-4">ยังไม่มี heartbeat จาก ESP32-CAM</td>
+        <td colspan="4" class="text-center text-muted py-4">ยังไม่มีอุปกรณ์เชื่อมต่อ</td>
       </tr>
     `;
     return;
@@ -276,14 +264,10 @@ function renderDeviceHeartbeats() {
   table.innerHTML = deviceHeartbeats
     .map((device) => {
       const online = Number(device.is_online) === 1; // เช็คสถานะ online/offline จาก backend
-      const rssi = Number(device.wifi_rssi); // ค่า Wi-Fi signal จาก ESP32-CAM
-      const heap = Number(device.free_heap); // หน่วยความจำว่างของ ESP32-CAM
-
       return `
       <tr>
         <td>
           <strong>${escapeHtml(device.device_id)}</strong> <!-- แสดงรหัสอุปกรณ์ -->
-          <span class="device-subtext">uptime ${formatUptime(device.uptime_ms)}</span> <!-- เวลาที่อุปกรณ์เปิดทำงาน -->
         </td>
         <td>${escapeHtml(device.house_name || (device.house_id ? `บ้าน ${device.house_id}` : "-"))}</td> <!-- ชื่อบ้านหรือรหัสบ้าน -->
         <td>${renderDeviceStatusBadge(online)}</td> <!-- badge แสดง Online/Offline -->
@@ -291,9 +275,6 @@ function renderDeviceHeartbeats() {
           <strong>${formatRelativeAge(device.seconds_since_seen)}</strong> <!-- เห็นอุปกรณ์ล่าสุดเมื่อไร -->
           <span class="device-subtext">${formatReadingTime(device.last_seen)}</span> <!-- เวลา heartbeat ล่าสุด -->
         </td>
-        <td>${Number.isFinite(rssi) ? `${rssi} dBm` : "-"}</td> <!-- ค่า Wi-Fi RSSI -->
-        <td>${Number.isFinite(heap) ? `${heap.toLocaleString("th-TH")} bytes` : "-"}</td> <!-- RAM ว่าง -->
-        <td>${escapeHtml(device.status_message || "-")}</td> <!-- ข้อความสถานะจากอุปกรณ์ -->
       </tr>
     `;
     })
@@ -554,7 +535,7 @@ function buildReadingStatusMap(readings) {
   return statusMap;
 }
 
-// ตั้งสถานะเตือนเมื่อเลขว่าง เลขลดลง เลขกระโดดสูง หรือไม่มีรูปประกอบ
+// ตั้งสถานะเตือนเมื่อเลขว่าง เลขลดลง เลขกระโดดผิดรูปแบบ หรือไม่มีรูปประกอบ
 function getReadingStatus(reading, previous) {
   // ถ้าไม่มีเลข reading ให้สถานะ empty
   if (!reading?.reading_value)
@@ -568,12 +549,9 @@ function getReadingStatus(reading, previous) {
     return { level: "danger", key: "danger", label: "เลขลดลง" };
   }
 
-  // ถ้าเพิ่มเกิน 2000 kWh ให้ warning
-  if (
-    Number.isFinite(previousValue) &&
-    currentValue - previousValue > HIGH_USAGE_WARNING
-  ) {
-    return { level: "warn", key: "high_usage", label: "เพิ่มสูง" };
+  // ถ้าเลขหลักใหญ่เปลี่ยนโดยไม่สัมพันธ์กับการทดหลักล่าง ให้เตือนว่าเลขอาจอ่านผิด
+  if (isSuspiciousDigitJump(reading, previous)) {
+    return { level: "warn", key: "digit_jump", label: "เลขกระโดด" };
   }
 
   // ถ้าไม่มีรูป ให้ warning
@@ -582,6 +560,82 @@ function getReadingStatus(reading, previous) {
 
   // ไม่เข้าเงื่อนไขไหน ถือว่าปกติ
   return { level: "ok", key: "ok", label: "ปกติ" };
+}
+
+// ตรวจเลขมิเตอร์แบบ odometer 5 หลัก: หลักใหญ่ควรเปลี่ยนเมื่อหลักล่างเข้าใกล้ช่วงทดเลขเท่านั้น
+function isSuspiciousDigitJump(reading, previous) {
+  if (!previous) return false; // ถ้าไม่มีค่าก่อนหน้า ไม่ต้องสงสัย
+
+  // แปลงเลขมิเตอร์เป็นตัวเลข
+  const currentValue = Number(reading?.reading_value);
+  const previousValue = Number(previous?.reading_value);
+  // ถ้าเลขไม่ถูกต้อง ให้ไม่ต้องเช็ค
+  if (!Number.isFinite(currentValue) || !Number.isFinite(previousValue)) {
+    return false;
+  }
+
+  // ตัดทศนิยมออก
+  const currentInt = Math.trunc(currentValue);
+  const previousInt = Math.trunc(previousValue);
+  if (currentInt <= previousInt) return false; // ถ้าเลขไม่เพิ่มขึ้น ไม่ถือว่ากระโดด
+
+  // แปลงเลขเป็น string แบบจำนวนหลักคงที่
+  const previousDigits = formatMeterDigits(previousInt);
+  const currentDigits = formatMeterDigits(currentInt);
+  if (!previousDigits || !currentDigits) return false;
+
+  // หา “หลักแรก” ที่เปลี่ยน
+  const firstChangedIndex = [...currentDigits].findIndex(
+    (digit, index) => digit !== previousDigits[index],
+  );
+  if (firstChangedIndex < 0) return false; // ถ้าไม่มีหลักไหนเปลี่ยน ไม่สงสัย
+
+  const placeValue = 10 ** (METER_DIGIT_LENGTH - firstChangedIndex - 1); // คำนวณว่าหลักที่เปลี่ยนคือหลักอะไร
+  if (placeValue === 1) return false; // ถ้าเปลี่ยนแค่หลักหน่วย ถือว่าปกติ
+
+  // ดูว่าเลขหลักนั้นเพิ่มทีละ 1 หรือไม่
+  const previousDigit = Number(previousDigits[firstChangedIndex]);
+  const currentDigit = Number(currentDigits[firstChangedIndex]);
+  const digitStep = (currentDigit - previousDigit + 10) % 10;
+  if (digitStep !== 1) return true;
+
+  // กรณี digitStep = 1 ยังต้องเช็คต่อ
+  const tolerance = getDigitCarryTolerance(reading, previous, placeValue);
+  const previousLower = previousInt % placeValue; // previousLower กับ currentLower คืออะไร
+  const currentLower = currentInt % placeValue;
+
+  return !(
+    previousLower >= placeValue - tolerance && currentLower <= tolerance
+  );
+}
+
+function formatMeterDigits(value) {
+  if (!Number.isFinite(value) || value < 0) return null;
+  const text = String(Math.trunc(value));
+  if (text.length > METER_DIGIT_LENGTH) return null;
+  return text.padStart(METER_DIGIT_LENGTH, "0");
+}
+
+// คำนวณช่วงเผื่อจากเวลาที่ห่างกัน
+function getDigitCarryTolerance(reading, previous, placeValue) {
+  // อ่านเวลา current กับ previous
+  const currentDate = parseDateValue(reading?.reading_time);
+  const previousDate = parseDateValue(previous?.reading_time);
+  // คำนวณเวลาที่ห่างกัน
+  const elapsedHours =
+    currentDate && previousDate
+      ? Math.max(0, (currentDate - previousDate) / 3600000)
+      : 1;
+  // คำนวณ tolerance ตามเวลา
+  const timeBasedTolerance = Math.ceil(
+    Math.max(1, elapsedHours) * METER_MAX_UNITS_PER_HOUR,
+  );
+
+  return Math.min(
+    placeValue - 1,
+    METER_MAX_DIGIT_TOLERANCE,
+    Math.max(METER_MIN_DIGIT_TOLERANCE, timeBasedTolerance),
+  );
 }
 
 // สร้าง badge สถานะคุณภาพ reading เช่น ปกติ เลขลดลง หรือไม่มีรูป
@@ -604,8 +658,33 @@ function formatCaptureMode(value) {
   return "-";
 }
 
+function formatSelectionReason(value) {
+  if (value === "close_transition_choose_highest") {
+    return "เลขกำลังเปลี่ยนหลัก จึงเลือกค่าที่เสถียรจากหลายเฟรม";
+  }
+
+  const reasons = {
+    manual_reading: "กรอกเลขเอง",
+    close_transition_choose_highest:
+      "เลขกำลังเปลี่ยนใกล้กัน จึงเลือกค่ามิเตอร์ที่สูงกว่า",
+    close_transition_stable_review:
+      "เลขกำลังเปลี่ยนหลัก จึงเลือกค่าที่เสถียรจากหลายเฟรม",
+    majority_confidence_median:
+      "เลือกจากค่าที่พบซ้ำมากที่สุดและความมั่นใจของโมเดล",
+    no_valid_prediction: "โมเดลอ่านเลขจากเฟรมไม่ได้",
+    manual_selected_frame: "ผู้ดูแลเลือกเฟรมนี้เอง",
+  };
+
+  return reasons[value] || value || "-";
+}
+
+function uploadImageSrc(filename) {
+  if (!filename) return "";
+  return `/uploads/${encodeURIComponent(filename)}`;
+}
+
 // แสดงข้อมูลเฟรม burst เพื่อให้ admin เข้าใจว่าระบบเลือกเฟรมนี้เพราะอะไร
-function renderFrameMetadata(reading) {
+function renderFrameMetadataLegacy(reading) {
   const container = document.getElementById("reviewFrameMeta");
   if (!container) return;
 
@@ -642,7 +721,7 @@ function renderFrameMetadata(reading) {
       </div>
       <div>
         <dt>เหตุผล</dt>
-        <dd>${escapeHtml(reading.selection_reason || "-")}</dd>
+        <dd>${escapeHtml(formatSelectionReason(reading.selection_reason))}</dd>
       </div>
       <div>
         <dt>Confidence</dt>
@@ -670,6 +749,134 @@ function renderFrameMetadata(reading) {
 }
 
 // แปลงค่าจาก dropdown ให้เป็นเงื่อนไขกรองสถานะ
+function renderFrameMetadata(reading) {
+  const container = document.getElementById("reviewFrameMeta");
+  if (!container) return;
+
+  const frames = Array.isArray(reading.frames_summary)
+    ? reading.frames_summary
+    : [];
+
+  if (!reading.capture_mode && frames.length === 0) {
+    container.innerHTML = `
+      <div class="frame-meta-empty">
+        ยังไม่มีข้อมูลการเลือกเฟรมสำหรับรายการนี้
+      </div>
+    `;
+    return;
+  }
+
+  const selectedFrame = Number.isInteger(Number(reading.selected_frame))
+    ? Number(reading.selected_frame)
+    : null;
+
+  container.innerHTML = `
+    <div class="frame-meta-header">
+      <div>
+        <span>ข้อมูลการอ่านจากกล้อง</span>
+        <strong>${formatCaptureMode(reading.capture_mode)}</strong>
+      </div>
+      <span class="frame-meta-badge">${frames.length ? `${frames.length} เฟรม` : "1 ภาพ"}</span>
+    </div>
+    <dl class="frame-meta-list">
+      <div>
+        <dt>เฟรมที่เลือก</dt>
+        <dd>${selectedFrame !== null && selectedFrame >= 0 ? selectedFrame + 1 : "-"}</dd>
+      </div>
+      <div>
+        <dt>เหตุผล</dt>
+        <dd>${escapeHtml(formatSelectionReason(reading.selection_reason))}</dd>
+      </div>
+      <div>
+        <dt>Confidence</dt>
+        <dd>${formatConfidence(reading.avg_conf)}</dd>
+      </div>
+    </dl>
+    ${
+      frames.length
+        ? `<div class="frame-summary-list burst-frame-gallery">
+            ${frames
+              .map((frame) => renderBurstFrameCard(reading, frame))
+              .join("")}
+          </div>`
+        : ""
+    }
+  `;
+}
+
+function renderBurstFrameCard(reading, frame) {
+  const frameIndex = Number(frame.index);
+  const frameNumber = Number.isFinite(frameIndex) ? frameIndex + 1 : "-";
+  const filename = frame.filename || "";
+  const isSelected = Boolean(frame.selected);
+
+  return `
+    <div class="frame-summary-item burst-frame-card ${isSelected ? "selected" : ""}">
+      <button
+        class="burst-frame-thumb"
+        type="button"
+        onclick="previewBurstFrame('${escapeHtml(filename)}')"
+        ${filename ? "" : "disabled"}
+        aria-label="ดูเฟรม ${frameNumber}"
+      >
+        ${
+          filename
+            ? `<img src="${uploadImageSrc(filename)}" alt="Frame ${frameNumber}" loading="lazy" />`
+            : `<span>ไม่มีรูป</span>`
+        }
+      </button>
+      <div class="burst-frame-info">
+        <div class="burst-frame-title">
+          <span>เฟรม ${frameNumber}</span>
+          ${isSelected ? `<b>เลือกอยู่</b>` : ""}
+        </div>
+        <strong>${frame.reading_value ?? "-"} kWh</strong>
+        <small>${formatConfidence(frame.avg_conf)} / ${frame.boxes ?? "-"} boxes</small>
+        <button
+          class="btn btn-outline-primary btn-sm"
+          type="button"
+          onclick="selectBurstFrame(${Number(reading.id)}, ${frameIndex})"
+          ${isSelected || !Number.isFinite(frameIndex) ? "disabled" : ""}
+        >
+          ใช้เฟรมนี้
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+function previewBurstFrame(filename) {
+  if (!filename) return;
+
+  const image = document.getElementById("reviewReadingImage");
+  const empty = document.getElementById("reviewImageEmpty");
+
+  image.src = uploadImageSrc(filename);
+  image.classList.remove("d-none");
+  empty.classList.add("d-none");
+}
+
+async function selectBurstFrame(readingId, frameIndex) {
+  const res = await fetch(`${API}/readings/${readingId}/selected-frame`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      frame_index: frameIndex,
+    }),
+  });
+
+  const payload = await res.json();
+
+  if (!res.ok) {
+    return alert(payload.error || "Could not select burst frame");
+  }
+
+  await loadMeterReadings();
+  openReadingEditor(readingId);
+}
+
 function matchesStatusFilter(status, filter) {
   if (!filter) return true;
   if (!status) return false;
@@ -806,7 +1013,7 @@ function openReadingEditor(id) {
   // ถ้ามีรูป แสดงรูป
   // ถ้าไม่มีรูป แสดงข้อความว่าไม่มีรูป
   if (reading.image_filename) {
-    image.src = `/uploads/${reading.image_filename}`;
+    image.src = uploadImageSrc(reading.image_filename);
     image.classList.remove("d-none");
     empty.classList.add("d-none");
   } else {

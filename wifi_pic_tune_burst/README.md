@@ -12,7 +12,7 @@ wifi_pic_tune_burst.ino
 
 - ส่ง heartbeat ไปที่ `/api/device-ping` ทุก 5 นาที เพื่อให้หน้า `/admin` เห็นว่า ESP32-CAM ยังออนไลน์อยู่
 - เมื่อถึงรอบอ่านค่า ให้ถ่ายภาพเป็น burst แล้วส่งทุกภาพใน request เดียวด้วย multipart field ชื่อ `images`
-- ค่าเริ่มต้นตอนนี้ใช้ 10 เฟรม ห่างกัน 30 วินาที เพื่อให้ backend คัด selected frame จากช่วงเวลาประมาณ 5 นาที
+- ค่าเริ่มต้นตอนนี้ใช้ 10 เฟรม ห่างกัน 5 นาที เพื่อให้ backend คัด selected frame จากช่วงเวลาประมาณ 45 นาที
 - Backend `/api/upload` จะอ่านทุกเฟรม เลือกเฟรมที่ดีที่สุด และบันทึกเฉพาะ selected reading
 - ถ้าต้องการทดสอบแบบ payload เบาลงชั่วคราว ค่อยลด `burstFrameCount` เป็น `5`
 
@@ -34,7 +34,7 @@ const bool runBurstOnBoot = false;
 const unsigned long scheduledIntervalMs = 60UL * 60UL * 1000UL;
 const unsigned long heartbeatIntervalMs = 5UL * 60UL * 1000UL;
 const int burstFrameCount = 10;
-const unsigned long burstFrameIntervalMs = 30000;
+const unsigned long burstFrameIntervalMs = 5UL * 60UL * 1000UL;
 ```
 
 หมายเหตุ:

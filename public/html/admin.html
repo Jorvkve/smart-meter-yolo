@@ -104,7 +104,7 @@
       <section class="surface-panel mt-4">
         <div class="panel-header">
           <div>
-            <p class="eyebrow">ESP32-CAM</p>
+            <p class="eyebrow">อุปกรณ์อ่านมิเตอร์</p>
             <h2>สถานะอุปกรณ์</h2>
           </div>
           <div class="device-panel-actions">
@@ -127,14 +127,11 @@
                 <th>บ้าน</th>
                 <th>สถานะ</th>
                 <th>ล่าสุด</th>
-                <th>WiFi</th>
-                <th>หน่วยความจำ</th>
-                <th>ข้อความ</th>
               </tr>
             </thead>
             <tbody id="deviceHeartbeatTable">
               <tr>
-                <td colspan="7" class="text-center text-muted py-4">
+                <td colspan="4" class="text-center text-muted py-4">
                   กำลังโหลดสถานะอุปกรณ์...
                 </td>
               </tr>
@@ -187,7 +184,8 @@
             <option value="" selected>ทุกสถานะ</option>
             <option value="needs_review">ต้องตรวจสอบ</option>
             <option value="danger">เลขลดลง</option>
-            <option value="warn">เพิ่มสูง/ไม่มีรูป</option>
+            <option value="warn">เลขกระโดด/ไม่มีรูป</option>
+            <option value="digit_jump">เลขกระโดด</option>
             <option value="missing_image">ไม่มีรูป</option>
             <option value="ok">ปกติ</option>
           </select>

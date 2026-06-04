@@ -150,6 +150,37 @@ function normalizePredictedReading(value) {
   return Number.isFinite(readingValue) ? readingValue : null;
 }
 
+function normalizeReadingTimeOverride(value) {
+  if (value === undefined || value === null || value === "") return null;
+
+  const text = String(value).trim().replace("T", " ").replace(/Z$/i, "");
+  const match = text.match(
+    /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})(?::(\d{2}))?$/,
+  );
+
+  if (!match) return null;
+
+  const [, yearText, monthText, dayText, hourText, minuteText, secondText] =
+    match;
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  const hour = Number(hourText);
+  const minute = Number(minuteText);
+  const second = secondText === undefined ? 0 : Number(secondText);
+
+  if (month < 1 || month > 12 || hour > 23 || minute > 59 || second > 59) {
+    return null;
+  }
+
+  const daysInMonth = new Date(year, month, 0).getDate();
+  if (day < 1 || day > daysInMonth) return null;
+
+  return `${yearText}-${monthText}-${dayText} ${hourText}:${minuteText}:${String(
+    second,
+  ).padStart(2, "0")}`;
+}
+
 // บันทึกแถว reading หลังจากทำนายเลขหรือรับเลขที่กรอกเองเสร็จแล้ว
 function insertReading({
   houseId,
@@ -160,22 +191,44 @@ function insertReading({
   selectionReason,
   avgConf,
   framesSummary,
+  readingTimeOverride,
+  readingTimeOffsetSeconds,
 }) {
   return new Promise((resolve, reject) => {
+    const hasReadingTimeOverride = Boolean(readingTimeOverride);
+    const hasReadingTimeOffset =
+      !hasReadingTimeOverride &&
+      Number.isFinite(readingTimeOffsetSeconds) &&
+      readingTimeOffsetSeconds > 0;
+    const hasReadingTime = hasReadingTimeOverride || hasReadingTimeOffset;
+    const readingTimeColumn = hasReadingTime ? ", reading_time" : "";
+    const readingTimeValue = hasReadingTimeOverride
+      ? ", ?"
+      : hasReadingTimeOffset
+        ? ", DATE_SUB(NOW(), INTERVAL ? SECOND)"
+        : "";
+    const params = [
+      houseId,
+      readingValue,
+      filename,
+      captureMode,
+      selectedFrame,
+      selectionReason,
+      avgConf,
+      framesSummary ? JSON.stringify(framesSummary) : null,
+    ];
+
+    if (hasReadingTimeOverride) {
+      params.push(readingTimeOverride);
+    } else if (hasReadingTimeOffset) {
+      params.push(readingTimeOffsetSeconds);
+    }
+
     db.query(
       `INSERT INTO meter_readings
-       (house_id, reading_value, image_filename, capture_mode, selected_frame, selection_reason, avg_conf, frames_summary)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        houseId,
-        readingValue,
-        filename,
-        captureMode,
-        selectedFrame,
-        selectionReason,
-        avgConf,
-        framesSummary ? JSON.stringify(framesSummary) : null,
-      ],
+       (house_id, reading_value, image_filename, capture_mode, selected_frame, selection_reason, avg_conf, frames_summary${readingTimeColumn})
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?${readingTimeValue})`,
+      params,
       (err, result) => {
         if (err) return reject(err);
         resolve(result);
@@ -218,6 +271,62 @@ function median(values) {
     : sorted[middle];
 }
 
+function buildReadingGroups(frames) {
+  const groups = new Map();
+
+  for (const frame of frames) {
+    const key = String(frame.reading_value);
+    const current = groups.get(key) || {
+      reading_value: frame.reading_value,
+      count: 0,
+      avg_conf_sum: 0,
+      full_digit_count: 0,
+      latest_index: -1,
+      best_frame: frame,
+    };
+
+    current.count += 1;
+    current.avg_conf_sum += frame.prediction?.avg_conf || 0;
+    current.full_digit_count +=
+      frame.prediction?.boxes === EXPECTED_DIGIT_COUNT ? 1 : 0;
+    current.latest_index = Math.max(current.latest_index, frame.index);
+
+    if (
+      (frame.prediction?.avg_conf || 0) >
+      (current.best_frame.prediction?.avg_conf || 0)
+    ) {
+      current.best_frame = frame;
+    }
+
+    groups.set(key, current);
+  }
+
+  return [...groups.values()];
+}
+
+function selectMajorityGroup(groups, middleValue, preferHigherOnTie = false) {
+  return [...groups].sort((a, b) => {
+    if (b.count !== a.count) return b.count - a.count;
+    if (b.full_digit_count !== a.full_digit_count) {
+      return b.full_digit_count - a.full_digit_count;
+    }
+
+    const aNearMedian = Math.abs(a.reading_value - middleValue);
+    const bNearMedian = Math.abs(b.reading_value - middleValue);
+    if (aNearMedian !== bNearMedian) return aNearMedian - bNearMedian;
+
+    const aAvgConf = a.avg_conf_sum / a.count;
+    const bAvgConf = b.avg_conf_sum / b.count;
+    if (bAvgConf !== aAvgConf) return bAvgConf - aAvgConf;
+
+    if (preferHigherOnTie && b.reading_value !== a.reading_value) {
+      return b.reading_value - a.reading_value;
+    }
+
+    return b.latest_index - a.latest_index;
+  })[0];
+}
+
 // เลือกเฟรมที่น่าเชื่อถือที่สุดจากชุด burst ก่อนบันทึกลงฐานข้อมูล
 // ใช้ prediction, confidence, จำนวน digit, median และ reading ล่าสุดมาช่วย
 function chooseBestFrame(frames, latestReading) {
@@ -241,28 +350,50 @@ function chooseBestFrame(frames, latestReading) {
   const minValue = Math.min(...values);
   const maxValue = Math.max(...values);
 
-  /*เงื่อนไขแรก: reading สูงกว่า ชนะ
-  ถ้า reading เท่ากัน: จำนวนกล่อง digit มากกว่า ชนะ
-  ถ้ายังเท่ากัน: confidence สูงกว่า ชนะ
-  */
+  /*
+เงื่อนไขการเลือกเฟรมที่ดีที่สุด:
+1. ใช้เฉพาะเฟรมที่อ่านค่า reading_value เป็นจำนวนเต็ม
+2. ถ้ามี latestReading จะพยายามเลือกเฉพาะค่าที่ไม่ต่ำกว่า latestReading
+3. ถ้าค่าที่เหลืออยู่ใกล้กันไม่เกิน 20 หน่วย จะถือว่าเป็นช่วงเลขกำลังเปลี่ยนหลัก
+4. จัดกลุ่มเฟรมตาม reading_value ที่อ่านได้
+5. เลือกกลุ่มที่เจอค่าซ้ำมากที่สุด
+6. ถ้าจำนวนเท่ากัน เลือกกลุ่มที่เจอ digit ครบตามจำนวนหลักมากกว่า
+7. ถ้ายังเท่ากัน เลือกค่าที่อยู่ใกล้ median มากกว่า เพื่อลดผลจากค่าหลุด
+8. ถ้ายังเท่ากัน เลือกกลุ่มที่มี confidence เฉลี่ยสูงกว่า
+9. ถ้าเป็นช่วงค่าใกล้กันไม่เกิน 20 หน่วยและยังเท่ากัน เลือก reading_value ที่น้อยกว่า
+   เพื่อไม่ดันเลขไปข้างหน้าเร็วเกินไปตอนเลขกำลังเปลี่ยนหลัก
+10. ถ้ายังเท่ากัน เลือกเฟรมที่ถ่ายล่าสุด
+*/
   if (maxValue - minValue <= CLOSE_TRANSITION_UNIT_WINDOW) {
-    const selected = [...candidates].sort((a, b) => {
-      if (b.reading_value !== a.reading_value)
-        return b.reading_value - a.reading_value;
-      if ((b.prediction?.boxes || 0) !== (a.prediction?.boxes || 0)) {
-        return (b.prediction?.boxes || 0) - (a.prediction?.boxes || 0);
+    const middleValue = median(values);
+    const selectedGroup = buildReadingGroups(candidates).sort((a, b) => {
+      if (b.count !== a.count) return b.count - a.count;
+      if (b.full_digit_count !== a.full_digit_count) {
+        return b.full_digit_count - a.full_digit_count;
       }
-      return (b.prediction?.avg_conf || 0) - (a.prediction?.avg_conf || 0);
+
+      const aNearMedian = Math.abs(a.reading_value - middleValue);
+      const bNearMedian = Math.abs(b.reading_value - middleValue);
+      if (aNearMedian !== bNearMedian) return aNearMedian - bNearMedian;
+
+      const aAvgConf = a.avg_conf_sum / a.count;
+      const bAvgConf = b.avg_conf_sum / b.count;
+      if (bAvgConf !== aAvgConf) return bAvgConf - aAvgConf;
+
+      if (a.reading_value !== b.reading_value) {
+        return a.reading_value - b.reading_value;
+      }
+
+      return b.latest_index - a.latest_index;
     })[0];
 
     return {
-      selected,
-      reason: "close_transition_choose_highest",
+      selected: selectedGroup.best_frame,
+      reason: "close_transition_stable_review",
     };
   }
 
   // กรณีค่าห่างกันมาก
-  const middleValue = median(values);
   const groups = new Map();
 
   for (const frame of candidates) {
@@ -295,6 +426,7 @@ function chooseBestFrame(frames, latestReading) {
   }
 
   // เรียงกลุ่มเพื่อเลือกกลุ่มที่น่าเชื่อถือที่สุด
+  const middleValue = median(values);
   const selectedGroup = [...groups.values()].sort((a, b) => {
     if (b.count !== a.count) return b.count - a.count;
     if (b.full_digit_count !== a.full_digit_count) {
@@ -408,6 +540,27 @@ router.post("/", upload.any(), async (req, res) => {
     req.body.keep_frames === undefined
       ? KEEP_UNSELECTED_BURST_FRAMES
       : String(req.body.keep_frames).toLowerCase() === "true";
+  const burstDurationMs = Number(req.body.burst_duration_ms);
+  const readingTimeOverride = normalizeReadingTimeOverride(
+    req.body.reading_time || req.body.capture_started_at,
+  );
+
+  if (
+    (req.body.reading_time || req.body.capture_started_at) &&
+    !readingTimeOverride
+  ) {
+    return res.status(400).json({
+      error: "reading_time must use YYYY-MM-DD HH:mm:ss",
+    });
+  }
+
+  const readingTimeOffsetSeconds =
+    !readingTimeOverride &&
+    imageFiles.length > 1 &&
+    Number.isFinite(burstDurationMs) &&
+    burstDurationMs > 0
+      ? Math.min(Math.round(burstDurationMs / 1000), 24 * 60 * 60)
+      : null;
 
   // ถ้าไม่มี manual reading ค่อยเรียกโมเดล
   if (readingValue === null) {
@@ -492,6 +645,8 @@ router.post("/", upload.any(), async (req, res) => {
       selectionReason,
       avgConf,
       framesSummary,
+      readingTimeOverride,
+      readingTimeOffsetSeconds,
     });
 
     // ส่งกลับไป POSTMAN หลังจากอัพรูปสำเร็จ
@@ -510,6 +665,8 @@ router.post("/", upload.any(), async (req, res) => {
       avg_conf: avgConf,
       previous_reading: latestReading,
       kept_all_frames: keepFrames,
+      reading_time: readingTimeOverride,
+      reading_time_offset_seconds: readingTimeOffsetSeconds,
       frames,
     });
   } catch (err) {
