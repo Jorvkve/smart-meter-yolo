@@ -1432,7 +1432,7 @@ h3 {
 }
 
 .daily-chart-frame {
-  min-height: 210px;
+  min-height: 224px;
 }
 
 .daily-house-chart-grid {
@@ -1442,35 +1442,113 @@ h3 {
 }
 
 .daily-house-chart-card {
-  padding: 14px;
-  border: 1px solid rgba(217, 226, 236, 0.86);
+  padding: 16px;
+  border: 1px solid rgba(175, 196, 216, 0.72);
   border-radius: 8px;
   background:
-    linear-gradient(135deg, rgba(9, 60, 93, 0.05), transparent 42%),
-    linear-gradient(315deg, rgba(93, 248, 216, 0.1), transparent 44%),
+    linear-gradient(135deg, rgba(9, 60, 93, 0.055), transparent 38%),
+    linear-gradient(315deg, rgba(111, 209, 215, 0.16), transparent 42%),
     #ffffff;
+  box-shadow: 0 10px 26px rgba(9, 60, 93, 0.06);
 }
 
 .daily-house-chart-header {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  align-items: end;
-  margin-bottom: 8px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  align-items: start;
+  margin-bottom: 12px;
 }
 
-.daily-house-chart-header span {
-  display: block;
-  margin-bottom: 4px;
+.daily-chart-title {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.daily-chart-title span {
+  display: inline-flex;
+  max-width: 100%;
+  padding: 3px 9px;
+  border: 1px solid rgba(28, 117, 188, 0.14);
+  border-radius: 8px;
   color: var(--blue);
+  background: rgba(28, 117, 188, 0.07);
   font-size: 0.78rem;
   font-weight: 900;
+  white-space: nowrap;
 }
 
-.daily-house-chart-header strong {
+.daily-chart-title strong {
   color: var(--ink);
-  font-size: 0.98rem;
+  font-size: 1.04rem;
   font-weight: 900;
+  line-height: 1.25;
+}
+
+.daily-chart-controls {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.daily-chart-range-controls {
+  display: grid;
+  grid-template-columns: auto auto auto;
+  align-items: center;
+  gap: 7px;
+  padding: 5px;
+  border: 1px solid rgba(9, 60, 93, 0.12);
+  border-radius: 8px;
+  background: rgba(248, 252, 253, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.76);
+}
+
+.daily-chart-range-caption {
+  padding: 0 4px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.daily-chart-range-controls label {
+  display: grid;
+  grid-template-columns: auto minmax(78px, 1fr);
+  gap: 6px;
+  align-items: center;
+  margin: 0;
+  padding: 6px 8px 6px 10px;
+  border: 1px solid rgba(9, 60, 93, 0.12);
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 4px 12px rgba(9, 60, 93, 0.05);
+}
+
+.daily-chart-range-controls span {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 900;
+}
+
+.daily-chart-range-select {
+  min-width: 78px;
+  border: 0;
+  color: #093c5d;
+  background: transparent;
+  font-size: 0.86rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.daily-chart-range-select:focus {
+  outline: 2px solid rgba(111, 209, 215, 0.42);
+  outline-offset: 2px;
 }
 
 .daily-house-chart-header p {
@@ -1486,11 +1564,12 @@ h3 {
   grid-template-columns: minmax(120px, 0.85fr) minmax(160px, 1fr);
   gap: 8px 14px;
   align-items: center;
-  margin: 8px 0 10px;
-  padding: 10px 12px;
-  border: 1px solid rgba(217, 226, 236, 0.86);
+  margin: 10px 0 12px;
+  padding: 11px 13px;
+  border: 1px solid rgba(175, 196, 216, 0.64);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.78);
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 7px 18px rgba(9, 60, 93, 0.045);
 }
 
 .daily-usage-summary div {
@@ -1544,28 +1623,33 @@ h3 {
   display: flex;
   align-items: center;
   gap: 8px;
+  padding: 5px;
+  border: 1px solid rgba(9, 60, 93, 0.1);
+  border-radius: 8px;
+  background: rgba(248, 252, 253, 0.88);
   text-align: center;
 }
 
 .daily-chart-day-nav .chart-nav-btn {
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
   font-size: 0.98rem;
 }
 
 .daily-chart-calendar-toggle {
-  min-width: 118px;
-  min-height: 30px;
-  margin-top: 5px;
-  padding: 5px 12px;
+  min-width: 124px;
+  min-height: 34px;
+  margin-top: 4px;
+  padding: 6px 12px;
   border: 1px solid rgba(9, 60, 93, 0.18);
   border-radius: 8px;
   border-color: rgba(9, 60, 93, 0.18);
   color: #093c5d;
-  background-color: rgba(255, 255, 255, 0.86);
+  background-color: #ffffff;
   font-size: 0.78rem;
-  font-weight: 800;
+  font-weight: 900;
   text-align: center;
+  box-shadow: 0 4px 12px rgba(9, 60, 93, 0.05);
 }
 
 .daily-chart-calendar-toggle:hover {
@@ -1852,6 +1936,19 @@ h3 {
     display: grid;
     grid-template-columns: 1fr;
     align-items: start;
+  }
+
+  .daily-chart-controls {
+    align-items: stretch;
+  }
+
+  .daily-chart-range-controls,
+  .daily-chart-day-nav {
+    width: 100%;
+  }
+
+  .daily-chart-day-nav {
+    justify-content: space-between;
   }
 
   .recent-reading-item {

@@ -297,21 +297,20 @@ function setupDailyChartDateControls() {
       return;
     }
 
+    const rangeSelect = event.target.closest(".daily-chart-range-select");
+    if (rangeSelect) {
+      updateDailyChartTimeRange(
+        rangeSelect.dataset.houseId,
+        rangeSelect.dataset.boundary,
+        Number(rangeSelect.value),
+      );
+      return;
+    }
+
     const button = event.target.closest(".daily-chart-day-btn"); // เช็คว่ากดปุ่มเปลี่ยนวัน prev/next ของกราฟไหม
     if (!button) return;
 
     changeDailyChartDate(button.dataset.houseId, button.dataset.direction);
-  });
-
-  container.addEventListener("change", (event) => {
-    const rangeSelect = event.target.closest(".daily-chart-range-select");
-    if (!rangeSelect) return;
-
-    updateDailyChartTimeRange(
-      rangeSelect.dataset.houseId,
-      rangeSelect.dataset.boundary,
-      Number(rangeSelect.value),
-    );
   });
 }
 
@@ -376,6 +375,14 @@ function formatHourLabel(hour) {
   return `${String(hour).padStart(2, "0")}:00`;
 }
 
+function buildHourLabels(timeRange) {
+  const { startHour, endHour } = normalizeTimeRange(timeRange);
+  return Array.from(
+    { length: endHour - startHour + 1 },
+    (_, index) => formatHourLabel(startHour + index),
+  );
+}
+
 function renderHourOptions(selectedHour, minHour, maxHour) {
   return Array.from({ length: maxHour - minHour + 1 }, (_, index) => {
     const hour = minHour + index;
@@ -388,7 +395,6 @@ function renderDailyTimeRangeControls(houseId, timeRange, disabled = false) {
 
   return `
     <div class="daily-chart-range-controls" aria-label="เลือกช่วงเวลาของกราฟ">
-      <span class="daily-chart-range-caption">ช่วงเวลา</span>
       <label>
         <span>จาก</span>
         <select
@@ -691,13 +697,12 @@ function renderDailyHouseCharts(houses, readingGroups) {
       return `
       <article class="daily-house-chart-card">
         <div class="daily-house-chart-header">
-          <div class="daily-chart-title">
+          <div>
             <span>${house.house_name}</span>
-            <strong>กราฟการใช้ไฟรายวัน</strong>
-          </div>
-          <div class="daily-chart-controls">
+            <strong>ค่ามิเตอร์รายชั่วโมง</strong>
             ${renderDailyTimeRangeControls(house.id, timeRange, dateKeys.length === 0)}
-            <div class="daily-chart-day-nav" aria-label="เลือกวันที่ของกราฟ ${house.house_name}">
+          </div>
+          <div class="daily-chart-day-nav" aria-label="เลือกวันที่ของกราฟ ${house.house_name}">
             <button
               class="chart-nav-btn daily-chart-day-btn"
               type="button"
@@ -727,7 +732,6 @@ function renderDailyHouseCharts(houses, readingGroups) {
               ${nextDisabled ? "disabled" : ""}
               aria-label="วันถัดไปของ ${house.house_name}"
             >&gt;</button>
-            </div>
           </div>
         </div>
         ${renderDailyUsageSummary(usageSummary)} <!-- กล่อง “หน่วยที่ใช้วันนี้” -->
@@ -754,7 +758,8 @@ function renderDailyHouseCharts(houses, readingGroups) {
       createDailyMeterChart(
         canvas,
         house.house_name,
-        meterSeries,
+        meterSeries.labels,
+        meterSeries.values,
         index,
       ),
     );
@@ -788,22 +793,16 @@ function getReadingsForTimeRange(readings, timeRange) {
 }
 
 function buildMeterSeries(readings, dateKey, timeRange) {
-  const selectedRange = normalizeTimeRange(timeRange);
   const readingsForRange = getReadingsForTimeRange(
     getReadingsForDate(readings, dateKey),
-    selectedRange,
+    timeRange,
   );
 
   return {
-    minHour: selectedRange.startHour,
-    maxHour: selectedRange.endHour + 1,
-    tickStep: getAxisTickStep(selectedRange),
-    axisTicks: buildAxisTicks(selectedRange),
-    points: readingsForRange.map((reading) => ({
-      x: getDecimalHour(reading.parsedDate),
-      y: Number(reading.reading_value),
-      readingTime: formatTimeOnly(reading.reading_time),
-    })),
+    labels: readingsForRange.map((reading) =>
+      formatTimeOnly(reading.reading_time),
+    ),
+    values: readingsForRange.map((reading) => Number(reading.reading_value)),
   };
 }
 
@@ -881,41 +880,8 @@ function renderDailyUsageSummary(summary) {
   `;
 }
 
-// สร้างกราฟเส้น Chart.js โดยใช้เวลาอ่านจริงของแต่ละจุด
-function getDecimalHour(date) {
-  return date.getHours() + date.getMinutes() / 60 + date.getSeconds() / 3600;
-}
-
-function formatAxisHour(value) {
-  return `${String(value).padStart(2, "0")}:00`;
-}
-
-function getAxisTickStep(timeRange) {
-  const totalHours = timeRange.endHour - timeRange.startHour + 1;
-  if (totalHours <= 8) return 1;
-  if (totalHours <= 13) return 2;
-  return 3;
-}
-
-function buildAxisTicks(timeRange) {
-  const step = getAxisTickStep(timeRange);
-  const ticks = [];
-
-  for (let hour = timeRange.startHour; hour <= timeRange.endHour; hour += step) {
-    ticks.push(hour);
-  }
-
-  const isFullDay = timeRange.startHour === 0 && timeRange.endHour === 23;
-  const lastTick = ticks[ticks.length - 1];
-
-  if (!isFullDay && lastTick !== timeRange.endHour) {
-    ticks.push(timeRange.endHour);
-  }
-
-  return ticks;
-}
-
-function createDailyMeterChart(canvas, houseName, series, index) {
+// สร้างกราฟเส้น Chart.js สำหรับเลขมิเตอร์รายชั่วโมงของบ้านหนึ่งหลัง
+function createDailyMeterChart(canvas, houseName, labels, data, index) {
   const palette = ["#093C5D", "#3B7597", "#0F9F9A", "#5DF8D8"];
   const color = palette[index % palette.length];
 
@@ -923,12 +889,12 @@ function createDailyMeterChart(canvas, houseName, series, index) {
     // สร้างกราฟเส้นด้วย Chart.js
     type: "line",
     data: {
+      labels, // labels คือ 24 ชั่วโมง
       datasets: [
-        // ค่าเลขมิเตอร์ตามเวลาอ่านจริง
+        // data คือค่า reading ของแต่ละชั่วโมง
         {
           label: houseName,
-          data: series.points,
-          parsing: false,
+          data,
           borderColor: color,
           backgroundColor: "rgba(111, 209, 215, 0.18)",
           borderWidth: 3,
@@ -938,14 +904,14 @@ function createDailyMeterChart(canvas, houseName, series, index) {
           pointBorderColor: color,
           pointBorderWidth: 2,
           tension: 0.35,
-          spanGaps: true,
+          spanGaps: true, // ถ้าข้อมูลเป็น null จะลากเส้นเชื่อมเฉพาะจุดที่มีข้อมูล
           fill: true,
         },
       ],
     },
     options: {
       responsive: true,
-      maintainAspectRatio: false,
+      maintainAspectRatio: false, // ให้กราฟปรับตามขนาด container ที่ CSS กำหนด
       interaction: {
         mode: "nearest",
         intersect: false,
@@ -956,7 +922,6 @@ function createDailyMeterChart(canvas, houseName, series, index) {
         },
         tooltip: {
           callbacks: {
-            title: (items) => items?.[0]?.raw?.readingTime || "",
             label: (context) =>
               `เลขมิเตอร์: ${formatMeter(context.parsed.y)} kWh`,
           },
@@ -964,19 +929,13 @@ function createDailyMeterChart(canvas, houseName, series, index) {
       },
       scales: {
         x: {
-          type: "linear",
-          min: series.minHour,
-          max: series.maxHour,
-          afterBuildTicks: (scale) => {
-            scale.ticks = series.axisTicks.map((value) => ({ value }));
-          },
           grid: { color: "rgba(148, 163, 184, 0.16)" },
           ticks: {
             color: "#344054",
             font: { size: 10, weight: "800" },
             maxRotation: 0,
-            autoSkip: false,
-            callback: (value) => formatAxisHour(Number(value)),
+            autoSkip: true,
+            maxTicksLimit: 8,
           },
         },
         y: {
