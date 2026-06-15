@@ -1,4 +1,11 @@
 from pathlib import Path
+import os
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+LOCAL_CONFIG_DIR = PROJECT_ROOT / ".ultralytics"
+LOCAL_CONFIG_DIR.mkdir(exist_ok=True)
+os.environ["YOLO_CONFIG_DIR"] = str(LOCAL_CONFIG_DIR)
+os.environ["MPLCONFIGDIR"] = str(LOCAL_CONFIG_DIR)
 
 import cv2
 from ultralytics import YOLO
@@ -99,9 +106,17 @@ def main():
 
     for result in results:
         meter_text, detections = summarize_digits(result)
+        avg_conf = (
+            sum(item["conf"] for item in detections) / len(detections)
+            if detections else None
+        )
         draw_clean_result(result, detections, output_dir)
 
-        print(f"{Path(result.path).name} -> {meter_text} | boxes={len(detections)}")
+        avg_conf_text = f"{avg_conf * 100:.1f}%" if avg_conf is not None else "-"
+        print(
+            f"{Path(result.path).name} -> {meter_text} | "
+            f"avg_conf={avg_conf_text} | boxes={len(detections)}"
+        )
         for item in detections:
             print(
                 f"  digit={item['digit']} conf={item['conf']:.3f} "

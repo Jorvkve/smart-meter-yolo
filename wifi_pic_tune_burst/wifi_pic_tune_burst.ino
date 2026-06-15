@@ -30,8 +30,8 @@ const char* password = "Tewit8123";
 
 const char* serverUrl = "http://192.168.1.184:3000/api/upload";
 const char* heartbeatUrl = "http://192.168.1.184:3000/api/device-ping";
-const char* houseId = "15";
-const char* deviceId = "esp32cam-house-15";
+const char* houseId = "4";
+const char* deviceId = "esp32cam-house-4";
 
 /* ================= Camera Config copied from stable sketch ================= */
 const framesize_t photoFrameSize = FRAMESIZE_SXGA;
@@ -50,7 +50,7 @@ const int ambientWarmupMs = 1200;
 const bool runBurstOnBoot = true;
 const unsigned long scheduledIntervalMs = 60UL * 60UL * 1000UL; // every 1 hour
 const unsigned long heartbeatIntervalMs = 5UL * 60UL * 1000UL; // every 5 minutes
-const int burstFrameCount = 2;
+const int burstFrameCount = 10;
 const unsigned long burstFrameIntervalMs = 1UL * 60UL * 1000UL; // 5 minutes apart
 
 #define RED_LED 33
@@ -65,7 +65,7 @@ CapturedFrame burstFrames[burstFrameCount];
 unsigned long lastBurstMillis = 0;
 unsigned long lastHeartbeatMillis = 0;
 
-void sendHeartbeat(const char* statusMessage);
+void sendHeartbeat();
 
 void setLED(bool state) {
   digitalWrite(RED_LED, state ? LOW : HIGH);
@@ -287,7 +287,7 @@ void waitWithHeartbeat(unsigned long durationMs) {
     unsigned long now = millis();
 
     if (now - lastHeartbeatMillis >= heartbeatIntervalMs) {
-      sendHeartbeat("alive");
+      sendHeartbeat();
     }
 
     delay(1000);
@@ -436,7 +436,7 @@ bool uploadBurstFrames(int captured, unsigned long burstDurationMs) {
   return httpCode == 200 || httpCode == -11;
 }
 
-void sendHeartbeat(const char* statusMessage) {
+void sendHeartbeat() {
   if (WiFi.status() != WL_CONNECTED && !connectWiFi()) {
     return;
   }
@@ -449,11 +449,7 @@ void sendHeartbeat(const char* statusMessage) {
   http.addHeader("Content-Type", "application/x-www-form-urlencoded");
 
   String body = "device_id=" + String(deviceId) +
-                "&house_id=" + String(houseId) +
-                "&uptime_ms=" + String(millis()) +
-                "&free_heap=" + String(ESP.getFreeHeap()) +
-                "&wifi_rssi=" + String(WiFi.RSSI()) +
-                "&status=" + String(statusMessage);
+                "&house_id=" + String(houseId);
 
   int httpCode = http.POST(body);
   Serial.printf("Heartbeat HTTP Code: %d\n", httpCode);
@@ -466,13 +462,13 @@ void runScheduledBurst() {
   unsigned long burstStartMillis = millis();
   lastBurstMillis = burstStartMillis;
 
-  sendHeartbeat("burst_start");
+  sendHeartbeat();
   Serial.println("Starting scheduled burst");
   int captured = captureBurstFrames();
   unsigned long burstDurationMs = millis() - burstStartMillis;
   uploadBurstFrames(captured, burstDurationMs);
   freeBurstFrames();
-  sendHeartbeat("burst_finished");
+  sendHeartbeat();
   Serial.println("Scheduled burst finished");
 }
 
@@ -493,7 +489,7 @@ void setup() {
     lastBurstMillis = millis();
   }
 
-  sendHeartbeat("boot");
+  sendHeartbeat();
 }
 
 void loop() {
@@ -504,7 +500,7 @@ void loop() {
   }
 
   if (now - lastHeartbeatMillis >= heartbeatIntervalMs) {
-    sendHeartbeat("alive");
+    sendHeartbeat();
   }
 
   delay(1000);

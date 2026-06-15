@@ -80,7 +80,33 @@
               <p class="eyebrow">รายการบ้าน</p>
               <h2>บ้านทั้งหมด</h2>
             </div>
-            <div id="totalHouses" class="total-pill"></div>
+            <div class="house-panel-meta">
+              <nav
+                id="housePagination"
+                class="house-pagination"
+                aria-label="เปลี่ยนหน้ารายการบ้าน"
+                hidden
+              >
+                <button
+                  id="prevHousePageBtn"
+                  class="house-page-btn"
+                  type="button"
+                  aria-label="หน้ารายการบ้านก่อนหน้า"
+                >
+                  &lt;
+                </button>
+                <span id="housePageInfo" class="house-page-info">หน้า 1/1</span>
+                <button
+                  id="nextHousePageBtn"
+                  class="house-page-btn"
+                  type="button"
+                  aria-label="หน้ารายการบ้านถัดไป"
+                >
+                  &gt;
+                </button>
+              </nav>
+              <div id="totalHouses" class="total-pill"></div>
+            </div>
           </div>
           <div id="houseList"></div>
         </div>

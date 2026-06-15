@@ -892,6 +892,68 @@ h3 {
   justify-content: flex-end;
 }
 
+.house-pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+}
+
+.house-pagination[hidden] {
+  display: none;
+}
+
+.house-page-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(9, 60, 93, 0.2);
+  border-radius: 8px;
+  color: #093c5d;
+  background: #ffffff;
+  font-size: 1rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.house-page-btn:hover:not(:disabled) {
+  border-color: rgba(29, 112, 184, 0.42);
+  background: rgba(29, 112, 184, 0.08);
+}
+
+.house-page-btn:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.house-page-info {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 5px 9px;
+  border: 1px solid rgba(9, 60, 93, 0.12);
+  border-radius: 8px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.72);
+  font-size: 0.82rem;
+  font-weight: 900;
+  text-align: center;
+}
+
+.house-page-info[hidden] {
+  display: none;
+}
+
+.house-panel-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+}
+
 .data-table {
   margin-bottom: 0;
 }

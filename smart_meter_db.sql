@@ -31,22 +31,16 @@ CREATE TABLE `device_heartbeats` (
   `id` int(11) NOT NULL,
   `device_id` varchar(80) NOT NULL,
   `house_id` int(11) DEFAULT NULL,
-  `ip_address` varchar(45) DEFAULT NULL,
-  `uptime_ms` bigint(20) DEFAULT NULL,
-  `free_heap` int(11) DEFAULT NULL,
-  `wifi_rssi` int(11) DEFAULT NULL,
-  `status_message` varchar(80) DEFAULT NULL,
-  `last_seen` datetime NOT NULL DEFAULT current_timestamp(),
-  `created_at` timestamp NULL DEFAULT current_timestamp()
+  `last_seen` datetime NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
 -- Dumping data for table `device_heartbeats`
 --
 
-INSERT INTO `device_heartbeats` (`id`, `device_id`, `house_id`, `ip_address`, `uptime_ms`, `free_heap`, `wifi_rssi`, `status_message`, `last_seen`, `created_at`) VALUES
-(1, 'test-pc', 14, '::1', 12345, 999, -40, 'manual_test', '2026-05-23 22:31:30', '2026-05-23 15:31:30'),
-(2, 'esp32cam-house-14', 14, '192.168.1.156', 4639981, 172372, -48, 'alive', '2026-05-24 03:53:10', '2026-05-23 18:30:39');
+INSERT INTO `device_heartbeats` (`id`, `device_id`, `house_id`, `last_seen`) VALUES
+(1, 'test-pc', 14, '2026-05-23 22:31:30'),
+(2, 'esp32cam-house-14', 14, '2026-05-24 03:53:10');
 
 -- --------------------------------------------------------
 
@@ -271,6 +265,12 @@ ALTER TABLE `meter_readings`
 --
 -- Constraints for dumped tables
 --
+
+--
+-- Constraints for table `device_heartbeats`
+--
+ALTER TABLE `device_heartbeats`
+  ADD CONSTRAINT `device_heartbeats_house_fk` FOREIGN KEY (`house_id`) REFERENCES `houses` (`id`) ON DELETE SET NULL;
 
 --
 -- Constraints for table `electric_bills`

@@ -6,8 +6,8 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 LOCAL_CONFIG_DIR = PROJECT_ROOT / ".ultralytics"
 LOCAL_CONFIG_DIR.mkdir(exist_ok=True)
-os.environ.setdefault("YOLO_CONFIG_DIR", str(LOCAL_CONFIG_DIR))
-os.environ.setdefault("MPLCONFIGDIR", str(LOCAL_CONFIG_DIR))
+os.environ["YOLO_CONFIG_DIR"] = str(LOCAL_CONFIG_DIR)
+os.environ["MPLCONFIGDIR"] = str(LOCAL_CONFIG_DIR)
 
 from ultralytics import YOLO
 

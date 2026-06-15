@@ -15,17 +15,14 @@ function ensureDevicePingTable(callback) {
       id INT NOT NULL AUTO_INCREMENT,
       device_id VARCHAR(80) NOT NULL,
       house_id INT NULL,
-      ip_address VARCHAR(45) NULL,
-      uptime_ms BIGINT NULL,
-      free_heap INT NULL,
-      wifi_rssi INT NULL,
-      status_message VARCHAR(80) NULL,
       last_seen DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (id),
       UNIQUE KEY device_id (device_id),
       KEY house_id (house_id),
-      KEY last_seen (last_seen)
+      KEY last_seen (last_seen),
+      CONSTRAINT device_heartbeats_house_fk
+        FOREIGN KEY (house_id) REFERENCES houses(id)
+        ON DELETE SET NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `;
 
@@ -43,11 +40,6 @@ ensureDevicePingTable((err) => {
 router.post("/", (req, res) => {
   const deviceId = String(req.body.device_id || "").trim();
   const houseId = req.body.house_id ? Number(req.body.house_id) : null;
-  const uptimeMs = req.body.uptime_ms ? Number(req.body.uptime_ms) : null;
-  const freeHeap = req.body.free_heap ? Number(req.body.free_heap) : null;
-  const wifiRssi = req.body.wifi_rssi ? Number(req.body.wifi_rssi) : null;
-  const statusMessage = String(req.body.status || "alive").slice(0, 80);
-  const ipAddress = req.ip?.replace("::ffff:", "") || null;
 
   if (!deviceId) {
     return res.status(400).json({
@@ -63,44 +55,36 @@ router.post("/", (req, res) => {
 
   const sql = `
     INSERT INTO device_heartbeats
-      (device_id, house_id, ip_address, uptime_ms, free_heap, wifi_rssi, status_message, last_seen)
-    VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
+      (device_id, house_id, last_seen)
+    VALUES (?, ?, NOW())
     ON DUPLICATE KEY UPDATE
       house_id = VALUES(house_id),
-      ip_address = VALUES(ip_address),
-      uptime_ms = VALUES(uptime_ms),
-      free_heap = VALUES(free_heap),
-      wifi_rssi = VALUES(wifi_rssi),
-      status_message = VALUES(status_message),
       last_seen = NOW()
   `;
 
-  db.query(
-    sql,
-    [deviceId, houseId, ipAddress, uptimeMs, freeHeap, wifiRssi, statusMessage],
-    (err) => {
-      if (err) {
-        console.log(err);
-        return res.status(500).json({
-          error: "Database error",
-        });
-      }
-
-      res.json({
-        message: "Device ping received",
-        device_id: deviceId,
-        house_id: houseId,
-        status: statusMessage,
+  db.query(sql, [deviceId, houseId], (err) => {
+    if (err) {
+      console.log(err);
+      return res.status(500).json({
+        error: "Database error",
       });
-    },
-  );
+    }
+
+    res.json({
+      message: "Device ping received",
+      device_id: deviceId,
+      house_id: houseId,
+    });
+  });
 });
 
 // ใช้ในหน้า /admin เพื่อดึงรายการอุปกรณ์ทั้งหมด พร้อมคำนวณว่า online หรือ offline จากเวลา last_seen
 router.get("/", (req, res) => {
   const sql = `
     SELECT
-      d.*,
+      d.device_id,
+      d.house_id,
+      d.last_seen,
       h.house_name,
       TIMESTAMPDIFF(SECOND, d.last_seen, NOW()) AS seconds_since_seen,
       CASE

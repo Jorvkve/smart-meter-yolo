@@ -5,7 +5,9 @@ let allHouses = []; // เก็บบ้านทั้งหมด
 let deviceHeartbeats = []; // เก็บสถานะ ESP32-CAM
 let editingReadingId = null; // เก็บว่า modal กำลังแก้ reading id ไหน
 let currentReadingPage = 1; // ใช้ pagination ตาราง readings
+let currentHousePage = 1; // ใช้ pagination รายการบ้าน
 let lastReadingFilterSignature = ""; // ใช้ดูว่า filter เปลี่ยนไหม
+const HOUSE_PAGE_SIZE = 3;
 const METER_DIGIT_LENGTH = 5; // มิเตอร์ที่ใช้ในโปรเจกต์นี้อ่านเลขหลัก kWh ทั้งหมด 5 หลัก
 const METER_MAX_UNITS_PER_HOUR = 5; // ใช้เป็นช่วงเผื่อเวลาหลักล่างกำลังทดเลข ไม่ใช่เกณฑ์คิดค่าไฟ
 const METER_MIN_DIGIT_TOLERANCE = 5;
@@ -22,6 +24,7 @@ const DEFAULT_READING_STATUS = "";
 // เมื่อหน้าโหลดเสร็จ ให้โหลดบ้านก่อน
 // จากนั้นโหลด readings กับ device heartbeat พร้อมกัน
 window.addEventListener("load", async () => {
+  setupHousePagination();
   await loadHouses();
   await Promise.all([loadMeterReadings(), loadDeviceHeartbeats()]);
 });
@@ -101,19 +104,49 @@ async function loadHouses() {
   // โหลดข้อมูลบ้านและแสดงเป็นการ์ดในหน้า admin
   const res = await fetch(`${API}/houses`); // เรียก GET /api/houses
   const houses = await res.json();
-  allHouses = houses; // เก็บบ้านทั้งหมดไว้ใน allHouses
+  allHouses = Array.isArray(houses) ? houses : []; // เก็บบ้านทั้งหมดไว้ใน allHouses
+  const totalPages = Math.max(1, Math.ceil(allHouses.length / HOUSE_PAGE_SIZE));
+  currentHousePage = Math.min(Math.max(currentHousePage, 1), totalPages);
+  renderHouseList();
+}
+
+function setupHousePagination() {
+  document.getElementById("prevHousePageBtn")?.addEventListener("click", () => {
+    if (currentHousePage <= 1) return;
+    currentHousePage -= 1;
+    renderHouseList();
+  });
+
+  document.getElementById("nextHousePageBtn")?.addEventListener("click", () => {
+    const totalPages = Math.max(1, Math.ceil(allHouses.length / HOUSE_PAGE_SIZE));
+    if (currentHousePage >= totalPages) return;
+    currentHousePage += 1;
+    renderHouseList();
+  });
+}
+
+function renderHouseList() {
   const container = document.getElementById("houseList");
   const total = document.getElementById("totalHouses");
   const template = document.getElementById("houseTemplate"); // เอา template จาก HTML มา clone ทำการ์ดบ้าน
 
   if (!container || !template) return;
 
-  if (total) total.innerHTML = `${houses.length} บ้าน`;
+  const totalPages = Math.max(1, Math.ceil(allHouses.length / HOUSE_PAGE_SIZE));
+  currentHousePage = Math.min(Math.max(currentHousePage, 1), totalPages);
+  const startIndex = (currentHousePage - 1) * HOUSE_PAGE_SIZE;
+  const visibleHouses = allHouses.slice(startIndex, startIndex + HOUSE_PAGE_SIZE);
+
+  if (total) total.innerHTML = `${allHouses.length} บ้าน`;
 
   container.innerHTML = "";
 
-  // วนบ้านทุกหลัง
-  houses.forEach((house) => {
+  if (visibleHouses.length === 0) {
+    container.innerHTML = `<p class="empty-note mb-0">ยังไม่มีข้อมูลบ้าน</p>`;
+  }
+
+  // วนบ้านเฉพาะหน้าปัจจุบัน
+  visibleHouses.forEach((house) => {
     const clone = template.content.cloneNode(true); // clone template ใหม่สำหรับบ้านแต่ละหลัง
     const toggleBtn = clone.querySelector(".deleteBtn");
 
@@ -149,6 +182,23 @@ async function loadHouses() {
     toggleBtn.onclick = () => toggleHouse(house.id);
     container.appendChild(clone);
   });
+
+  updateHousePagination(totalPages);
+}
+
+function updateHousePagination(totalPages) {
+  const pagination = document.getElementById("housePagination");
+  const pageInfo = document.getElementById("housePageInfo");
+  const prevButton = document.getElementById("prevHousePageBtn");
+  const nextButton = document.getElementById("nextHousePageBtn");
+
+  if (pagination) pagination.hidden = allHouses.length <= HOUSE_PAGE_SIZE;
+  if (pageInfo) {
+    pageInfo.hidden = allHouses.length <= HOUSE_PAGE_SIZE;
+    pageInfo.innerText = `หน้า ${currentHousePage}/${totalPages}`;
+  }
+  if (prevButton) prevButton.disabled = currentHousePage <= 1;
+  if (nextButton) nextButton.disabled = currentHousePage >= totalPages;
 }
 
 // สลับสถานะ is_active แทนการลบบ้านออกจากฐานข้อมูล
@@ -193,6 +243,7 @@ async function addHouse() {
   document.getElementById("address").value = "";
   document.getElementById("phone").value = "";
 
+  currentHousePage = Number.MAX_SAFE_INTEGER;
   loadHouses(); // โหลดรายการบ้านใหม่
 }
 
