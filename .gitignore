@@ -5,9 +5,21 @@ node_modules
 .venv/
 .ultralytics/
 Ultralytics/
+secrets.h
+.env
+.env.*
 cropped_images/
+ESP32-CAM image/
+iphone image/
+meter_dataset/
+outputs/
+runs/
+test_images/
+test_images_unseen/
+uploads/
 wifi_pic_tune/ESP32-CAM image/
 wifi_pic_tune/iphone image/
 *.zip
+*.pt
 runs/detect/predict*/
 runs/detect/runs/

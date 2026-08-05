@@ -23,15 +23,16 @@
 #include "esp_heap_caps.h"
 #include "soc/soc.h"
 #include "soc/rtc_cntl_reg.h"
+#include "secrets.h"
 
 /* ================= WiFi and Backend Config ================= */
-const char* ssid = "Jorvkve_2.4G";
-const char* password = "Tewit8123";
+const char* ssid = WIFI_SSID;
+const char* password = WIFI_PASSWORD;
 
-const char* serverUrl = "http://192.168.1.184:3000/api/upload";
-const char* heartbeatUrl = "http://192.168.1.184:3000/api/device-ping";
-const char* houseId = "4";
-const char* deviceId = "esp32cam-house-4";
+const char* serverUrl = SERVER_URL;
+const char* heartbeatUrl = HEARTBEAT_URL;
+const char* houseId = HOUSE_ID;
+const char* deviceId = DEVICE_ID;
 
 /* ================= Camera Config copied from stable sketch ================= */
 const framesize_t photoFrameSize = FRAMESIZE_SXGA;

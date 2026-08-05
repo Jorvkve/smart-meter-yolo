@@ -23,22 +23,21 @@
 #include "esp_heap_caps.h"
 #include "soc/soc.h"
 #include "soc/rtc_cntl_reg.h"
+#include "secrets.h"
 
 /* ================= ตั้งค่า WiFi =================
    ESP32-CAM ต้องใช้ WiFi 2.4GHz
 */
-const char* ssid = "Jorvkve_2.4G";
-const char* password = "Tewit8123";
+const char* ssid = WIFI_SSID;
+const char* password = WIFI_PASSWORD;
 
 /* ================= ตั้งค่า Backend =================
    serverUrl คือ endpoint ของ backend บนเครื่อง PC
    ต้องใช้ IPv4 ของ PC ในวง LAN ห้ามใช้ localhost และห้ามใช้ IP ของ ESP32-CAM
    houseId คือรหัสบ้าน/มิเตอร์ที่กล้องตัวนี้ประจำอยู่
 */
-const char* serverUrl =
-// "https://smart-meter-render.onrender.com/upload";
-  "http://192.168.1.129:3000/api/upload";
-  const char* houseId = "3";
+const char* serverUrl = SERVER_URL;
+const char* houseId = HOUSE_ID;
 
 /* ================= ตั้งค่ารูปภาพและการอัปโหลด =================
    photoFrameSize และ jpegQuality ใช้ควบคุมความชัดและขนาดไฟล์รูป
